@@ -6,6 +6,7 @@
 # - 1080p: Adds scale=1920:1080 filter (triggered by -s)
 # - Audio: Selection of stream index (triggered by -a)
 # - Subtitles: Hard-encoding / no-strip (triggered by -h)
+# - Colon: Replace dashes with colons in title (triggered by -c)
 
 # Usage: ./combined_convert_video [options] <filename> [genre]
 # Options:
@@ -13,6 +14,7 @@
 #   -s, --1080p       Scale 2160p down to 1080p
 #   -a, --audio <id> Specify audio stream index (default: 0)
 #   -h, --hard_sub   Hard encode subtitles (removes -sn filter)
+#   -c, --colon      Replace dashes with colons in filename and metadata
 
 # Variables
 OUTPUT_ENC="h264_v4l2m2m"
@@ -20,6 +22,7 @@ SCALE_FILTER=""
 AUDIO_INDEX=0
 HARD_SUB=false
 FORCE_NO_GPU=false
+REPLACE_COLON=false
 
 # Parse options
 while [[ "$#" -gt 0 ]]; do
@@ -41,6 +44,10 @@ while [[ "$#" -gt 0 ]]; do
             HARD_SUB=true
             shift
             ;;
+        -c|--colon)
+            REPLACE_COLON=true
+            shift
+            ;;
         *)
             break
     esac
@@ -57,7 +64,7 @@ else
     DEST_PATH="$genre"
 fi
 if [ -z "$filename" ]; then
-    echo "Usage: $0 [-n] [-s] [-a <id>] [-h] <filename> [genre]"
+    echo "Usage: $0 [-n] [-s] [-a <id>] [-h] [-c] <filename> [genre]"
     exit 1
 fi
 
@@ -67,12 +74,22 @@ filename1=$(basename "$filename")
 prefix=$(echo "${filename1%.*}")
 prefix1=$(echo "${filename%.*}")
 
-new_filename="${prefix1}.mp4"
-new_filename_HD="${prefix1}_HD.mp4"
-new_filename_iPad="${prefix1}_iPad.mp4"
+# Replace dashes with colons if requested
+if [ "$REPLACE_COLON" = "true" ]; then
+    prefix_colon=$(echo "$prefix" | sed 's/ -/:/')
+else
+    prefix_colon="$prefix"
+fi
+
+new_filename="${prefix_colon}.mp4"
+new_filename_HD="${prefix_colon}_HD.mp4"
+new_filename_iPad="${prefix_colon}_iPad.mp4"
 
 echo "Original file name: $filename"
 echo "Prefix: $prefix"
+if [ "$REPLACE_COLON" = "true" ]; then
+    echo "New prefix (dashes replaced): $prefix_colon"
+fi
 echo "New file names: ${new_filename_iPad} ${new_filename_HD} ${new_filename}"
 
 target_bitrate=2000
@@ -85,7 +102,9 @@ touch -r "$filename" .timestamp_$PID
 # Helper function to generate the ffmpeg command string
 build_cmd() {
     local enc=$1
-    local cmd="ffmpeg -y -i \"$filename\" -sn $SCALE_FILTER -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:$AUDIO_INDEX -metadata title=\"$prefix\" -metadata genre=\"$METADATA_GENRE\" -vcodec $enc -b:v ${target_bitrate}k -pix_fmt yuv420p -acodec libmp3lame -b:a 128k -filter:a loudnorm -f mp4 tmp_$PID.mp4 </dev/null"
+    # Use colon-prefixed prefix for metadata title
+    local meta_title="$prefix_colon"
+    local cmd="ffmpeg -y -i \"$filename\" -sn $SCALE_FILTER -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:$AUDIO_INDEX -metadata title=\"$meta_title\" -metadata genre=\"$METADATA_GENRE\" -vcodec $enc -b:v ${target_bitrate}k -pix_fmt yuv420p -acodec libmp3lame -b:a 128k -filter:a loudnorm -f mp4 tmp_$PID.mp4 </dev/null"
 
     # If hard_sub is true, remove the -sn (no subtitles) flag
     if [ "$HARD_SUB" = "true" ]; then
@@ -120,8 +139,18 @@ done
 
 # --- Finalization ---
 touch -r .timestamp_$PID tmp_$PID.mp4
+
+# Create destination directory if needed (use colon-prefixed prefix for path)
 mkdir -p /mnt/HDD/films/"$DEST_PATH"
-mv -v tmp_$PID.mp4 /mnt/HDD/films/"$DEST_PATH"/"$new_filename"
+
+if [ "$REPLACE_COLON" = "true" ]; then
+    # If dashes were replaced, copy the file with new name and remove original
+    mv -v tmp_$PID.mp4 /mnt/HDD/films/"$DEST_PATH"/"$new_filename"
+    rm -f "$filename"
+else
+    # Original behavior - just move the temp file
+    mv -v tmp_$PID.mp4 /mnt/HDD/films/"$DEST_PATH"/"$new_filename"
+fi
 
 rm -f .timestamp_$PID
 exit 0
