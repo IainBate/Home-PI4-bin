@@ -40,10 +40,10 @@ cd "$WORK_DIR"
 
 # Find all S##E## pattern files and extract unique seasons
 seasons=()
-for file in S[0-9][0-9]E[0-9][0-9].*; do
+while IFS= read -r -d '' file; do
     if [[ -f "$file" ]]; then
         # Extract season number (S##)
-        season=$(echo "$file" | grep -oP 'S\d{2}')
+        season=$(echo "$file" | grep -oE 'S[0-9][0-9]' | head -1)
         season_num=${season#S}
         # Remove leading zero for folder name
         season_num=$((10#$season_num))
@@ -53,7 +53,7 @@ for file in S[0-9][0-9]E[0-9][0-9].*; do
             seasons+=("$season_num")
         fi
     fi
-done
+done < <(find "$WORK_DIR" -maxdepth 1 -name "S[0-9][0-9]E[0-9][0-9]*" -print0 2>/dev/null)
 
 # Sort seasons numerically
 IFS=$'\n' sorted_seasons=($(sort -n <<<"${seasons[*]}")); unset IFS
@@ -82,23 +82,27 @@ for season_num in "${sorted_seasons[@]}"; do
 
     # Move files for this season to the folder
     moved_count=0
-    for file in S0${season_num}E* S${season_num}E*; do
+    # Use find to get all matching files, then filter by season
+    while IFS= read -r -d '' file; do
         if [[ -f "$file" ]]; then
-            # Get just the season number with leading zero for pattern matching
-            season_padded=$(printf "%02d" $season_num)
+            # Extract season number from filename (S##)
+            file_season=$(echo "$file" | grep -oE 'S[0-9][0-9]' | head -1)
+            file_season_num=${file_season#S}
+            # Remove leading zero for comparison
+            file_season_num=$((10#$file_season_num))
 
-            # Check if file starts with S + season number
-            if [[ "$file" =~ ^S${season_padded}E.* ]]; then
+            # Check if this file belongs to current season
+            if [[ $file_season_num -eq $season_num ]]; then
                 if [[ "$DRY_RUN" == true ]]; then
                     echo "DRY RUN: Would move: $file -> $folder_name/"
                 else
                     echo "  Moving: $file -> $folder_name/"
                     mv "$file" "$folder_name/"
                 fi
-                ((moved_count++))
+                moved_count=$((moved_count + 1))
             fi
         fi
-    done
+    done < <(find "$WORK_DIR" -maxdepth 1 -name "S[0-9][0-9]E[0-9][0-9]*" -print0 2>/dev/null)
 
     if [[ "$DRY_RUN" == true ]]; then
         echo "  Would move $moved_count file(s) to $folder_name"
