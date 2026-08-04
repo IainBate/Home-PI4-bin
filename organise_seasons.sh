@@ -6,6 +6,7 @@
 set -e
 
 DRY_RUN=false
+TARGET_DIR="."
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -15,23 +16,27 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         *)
+            # Non-flag argument is the target directory
+            if [[ ! "$1" =~ ^- ]]; then
+                TARGET_DIR="$1"
+            fi
             shift
             ;;
     esac
 done
 
-# Get the directory where the script is located
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the target directory to an absolute path
+WORK_DIR="$(cd "$TARGET_DIR" && pwd)"
 
 if [[ "$DRY_RUN" == true ]]; then
     echo "DRY RUN: No changes will be made"
 fi
 
-echo "Organizing files in: $SCRIPT_DIR"
+echo "Organizing files in: $WORK_DIR"
 echo
 
-# Change to the script directory
-cd "$SCRIPT_DIR"
+# Change to the work directory
+cd "$WORK_DIR"
 
 # Find all S##E## pattern files and extract unique seasons
 seasons=()
