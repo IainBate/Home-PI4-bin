@@ -122,39 +122,34 @@ FORCED_SUB_MAP=""
 SUBTITLE_CODEC=""
 if [ "$FORCED_SUBS" = "true" ]; then
     echo "Looking for forced UK/English subtitle streams..."
-    # Get list of subtitle streams and look for forced ones with eng language
+    # Get list of subtitle streams from ffmpeg output
     SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1)
-    FORCED_STREAM=$(echo "$SUBTITLE_INFO" | grep -E "subtitle.*forced| Forced" | head -1)
 
-    if [ -n "$FORCED_STREAM" ]; then
-        # Extract stream index from the line like "Stream #0:2[eng](eng): Subtitle: mov_text (forced)"
-        STREAM_INDEX=$(echo "$SUBTITLE_INFO" | grep -oP 'Stream #0:\K\d+(?=\[.*\].*subtitle.*forced|Stream #0:\K\d+(?=\[.*\].*Subtitle.*Forced)' | head -1)
+    # Look for lines like: Stream #0:2(eng): Subtitle: subrip (srt) (default) (forced)
+    FORCED_STREAM_LINE=$(echo "$SUBTITLE_INFO" | grep "Subtitle.*forced" | head -1)
 
-        if [ -z "$STREAM_INDEX" ]; then
-            # Try alternative pattern matching for stream index
-            STREAM_INDEX=$(ffmpeg -i "$filename" 2>&1 | grep -E "Stream #0:\d+.*subtitle" | grep -i "forced\|eng" | head -1 | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
-        fi
+    if [ -n "$FORCED_STREAM_LINE" ]; then
+        # Extract stream index from line like "Stream #0:2(eng): Subtitle..."
+        STREAM_INDEX=$(echo "$FORCED_STREAM_LINE" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
 
         if [ -n "$STREAM_INDEX" ]; then
             echo "Found forced subtitle stream at index $STREAM_INDEX"
             FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
-        else
-            # Try to find any english subtitle as fallback
-            ENG_STREAM=$(ffmpeg -i "$filename" 2>&1 | grep -E "Stream #0:\d+.*subtitle.*eng" | head -1)
-            if [ -n "$ENG_STREAM" ]; then
-                STREAM_INDEX=$(echo "$ENG_STREAM" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
-                echo "Found English subtitle stream at index $STREAM_INDEX (no forced flag detected)"
-                FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
-            fi
-        fi
-
-        if [ -z "$FORCED_SUB_MAP" ]; then
-            echo "Warning: No suitable forced/English subtitle stream found"
-        else
             SUBTITLE_CODEC="-metadata:s:s:0 language=eng"
+        else
+            echo "Warning: Could not parse stream index from forced subtitle line"
         fi
     else
-        echo "No forced subtitle streams detected in input file"
+        # No forced subtitles found, try to find any English subtitle as fallback
+        ENG_STREAM_LINE=$(echo "$SUBTITLE_INFO" | grep "Subtitle:" | head -1)
+        if [ -n "$ENG_STREAM_LINE" ]; then
+            STREAM_INDEX=$(echo "$ENG_STREAM_LINE" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+            echo "No forced subtitles found, using first subtitle stream at index $STREAM_INDEX"
+            FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
+            SUBTITLE_CODEC="-metadata:s:s:0 language=eng"
+        else
+            echo "Warning: No subtitle streams found in input file"
+        fi
     fi
 fi
 
