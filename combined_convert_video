@@ -6,6 +6,7 @@
 # - 1080p: Adds scale=1920:1080 filter (triggered by -s)
 # - Audio: Selection of stream index (triggered by -a)
 # - Subtitles: Hard-encoding / no-strip (triggered by -h)
+# - Forced subtitles: Include only forced UK/English subs (triggered by --forced)
 # - Colon: Replace dashes with colons in title (triggered by -c)
 
 # Usage: ./combined_convert_video [options] <filename> [genre]
@@ -14,6 +15,7 @@
 #   -s, --1080p       Scale 2160p down to 1080p
 #   -a, --audio <id> Specify audio stream index (default: 0)
 #   -h, --hard_sub   Hard encode subtitles (removes -sn filter)
+#   --forced         Include only forced UK/English subtitles (hard-encoded)
 #   -c, --colon      Replace dashes with colons in filename and metadata
 
 # Variables
@@ -21,6 +23,7 @@ OUTPUT_ENC="h264_v4l2m2m"
 SCALE_FILTER=""
 AUDIO_INDEX=0
 HARD_SUB=false
+FORCED_SUBS=false
 FORCE_NO_GPU=false
 REPLACE_COLON=false
 
@@ -48,6 +51,10 @@ while [[ "$#" -gt 0 ]]; do
             REPLACE_COLON=true
             shift
             ;;
+        --forced)
+            FORCED_SUBS=true
+            shift
+            ;;
         *)
             break
     esac
@@ -63,8 +70,21 @@ else
     METADATA_GENRE="$genre"
     DEST_PATH="$genre"
 fi
+if [ "$HARD_SUB" = "true" ] && [ "$FORCED_SUBS" = "true" ]; then
+    echo "Error: Cannot use both -h/--hard_sub and --forced together"
+    exit 1
+fi
+
 if [ -z "$filename" ]; then
-    echo "Usage: $0 [-n] [-s] [-a <id>] [-h] [-c] <filename> [genre]"
+    echo "Usage: $0 [-n] [-s] [-a <id>] [--hard_sub | --forced] [-c] <filename> [genre]"
+    echo ""
+    echo "Options:"
+    echo "  -n, --no-gpu      Force software encoding (libx264)"
+    echo "  -s, --1080p       Scale 2160p down to 1080p"
+    echo "  -a, --audio <id>  Specify audio stream index (default: 0)"
+    echo "  --hard_sub        Hard encode all subtitles"
+    echo "  --forced          Include only forced UK/English subtitles (hard-encoded)"
+    echo "  -c, --colon       Replace dashes with colons in filename and metadata"
     exit 1
 fi
 
@@ -97,6 +117,47 @@ target_bitrate=2000
 ffmpeg -i "$filename" 2>&1 | grep -E "Duration|bitrate" || true
 echo "Target bitrate: ${target_bitrate}k"
 
+# Handle forced subtitles - detect and map only forced English/UK subtitle streams
+FORCED_SUB_MAP=""
+SUBTITLE_CODEC=""
+if [ "$FORCED_SUBS" = "true" ]; then
+    echo "Looking for forced UK/English subtitle streams..."
+    # Get list of subtitle streams and look for forced ones with eng language
+    SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1)
+    FORCED_STREAM=$(echo "$SUBTITLE_INFO" | grep -E "subtitle.*forced| Forced" | head -1)
+
+    if [ -n "$FORCED_STREAM" ]; then
+        # Extract stream index from the line like "Stream #0:2[eng](eng): Subtitle: mov_text (forced)"
+        STREAM_INDEX=$(echo "$SUBTITLE_INFO" | grep -oP 'Stream #0:\K\d+(?=\[.*\].*subtitle.*forced|Stream #0:\K\d+(?=\[.*\].*Subtitle.*Forced)' | head -1)
+
+        if [ -z "$STREAM_INDEX" ]; then
+            # Try alternative pattern matching for stream index
+            STREAM_INDEX=$(ffmpeg -i "$filename" 2>&1 | grep -E "Stream #0:\d+.*subtitle" | grep -i "forced\|eng" | head -1 | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+        fi
+
+        if [ -n "$STREAM_INDEX" ]; then
+            echo "Found forced subtitle stream at index $STREAM_INDEX"
+            FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
+        else
+            # Try to find any english subtitle as fallback
+            ENG_STREAM=$(ffmpeg -i "$filename" 2>&1 | grep -E "Stream #0:\d+.*subtitle.*eng" | head -1)
+            if [ -n "$ENG_STREAM" ]; then
+                STREAM_INDEX=$(echo "$ENG_STREAM" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                echo "Found English subtitle stream at index $STREAM_INDEX (no forced flag detected)"
+                FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
+            fi
+        fi
+
+        if [ -z "$FORCED_SUB_MAP" ]; then
+            echo "Warning: No suitable forced/English subtitle stream found"
+        else
+            SUBTITLE_CODEC="-metadata:s:s:0 language=eng"
+        fi
+    else
+        echo "No forced subtitle streams detected in input file"
+    fi
+fi
+
 touch -r "$filename" .timestamp_$PID
 
 # Helper function to generate the ffmpeg command string
@@ -104,12 +165,18 @@ build_cmd() {
     local enc=$1
     # Use colon-prefixed prefix for metadata title
     local meta_title="$prefix_colon"
-    local cmd="ffmpeg -y -i \"$filename\" -sn $SCALE_FILTER -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:$AUDIO_INDEX -metadata title=\"$meta_title\" -metadata genre=\"$METADATA_GENRE\" -vcodec $enc -b:v ${target_bitrate}k -pix_fmt yuv420p -acodec libmp3lame -b:a 128k -filter:a loudnorm -f mp4 tmp_$PID.mp4 </dev/null"
 
-    # If hard_sub is true, remove the -sn (no subtitles) flag
-    if [ "$HARD_SUB" = "true" ]; then
-        cmd=$(echo "$cmd" | sed 's/-sn//')
+    # Build subtitle options based on mode
+    local subtitle_opts="-sn"
+    if [ "$FORCED_SUBS" = "true" ] && [ -n "$FORCED_SUB_MAP" ]; then
+        # Use forced subtitles when --forced is specified and stream found
+        subtitle_opts="$FORCED_SUB_MAP $SUBTITLE_CODEC"
+    elif [ "$HARD_SUB" = "true" ]; then
+        # Hard encode all subtitles (for backwards compatibility with -h)
+        subtitle_opts=$(echo "$subtitle_opts" | sed 's/-sn//')
     fi
+
+    local cmd="ffmpeg -y -i \"$filename\" $subtitle_opts $SCALE_FILTER -map_chapters -1 -map_metadata -1 -map 0:v:0 -map 0:a:$AUDIO_INDEX -metadata title=\"$meta_title\" -metadata genre=\"$METADATA_GENRE\" -vcodec $enc -b:v ${target_bitrate}k -pix_fmt yuv420p -acodec libmp3lame -b:a 128k -filter:a loudnorm -f mp4 tmp_$PID.mp4 </dev/null"
     echo "$cmd"
 }
 
