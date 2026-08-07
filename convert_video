@@ -9,8 +9,10 @@
 # - Audio selection: Stream index (triggered by -a)
 # - Subtitles: Hard-encoding / no-strip (triggered by -h or --forced)
 # - Colon replacement: In filename and metadata (triggered by -c)
+# - Olympus mode: Batch process .MOV files with date-based naming (triggered by --olympus)
 
 # Usage: ./convert_video [options] <filename> [genre]
+#        ./convert_video --olympus <directory>
 # Options:
 #   -n, --no-gpu      Force software encoding (libx264)
 #   -s, --1080p       Scale 2160p down to 1080p
@@ -18,11 +20,13 @@
 #   -h, --hard_sub    Hard encode all subtitles
 #   --forced          Include only forced UK/English subtitles (hard-encoded)
 #   -c, --colon       Replace dashes with colons in filename and metadata
+#   --olympus         Olympus .MOV batch mode (date-based naming, libx264)
 
 # Legacy script equivalents:
 #   ./convert_video_just_HD <file>             => ./convert_video <file>
 #   ./convert_video_without_GPU_just_HD <file> => ./convert_video -n <file>
 #   ./convert_video_both_HD_and_iPad <file>    => ./convert_video <file> (HD only, iPad obsolete)
+#   ./convert_olympus_videos.py <dir>          => ./convert_video --olympus <dir>
 
 # Variables
 OUTPUT_ENC="h264_v4l2m2m"
@@ -32,6 +36,8 @@ HARD_SUB=false
 FORCED_SUBS=false
 FORCE_NO_GPU=false
 REPLACE_COLON=false
+OLYMPUS_MODE=false
+TARGET_DIR="."
 
 # Parse options
 while [[ "$#" -gt 0 ]]; do
@@ -61,13 +67,23 @@ while [[ "$#" -gt 0 ]]; do
             FORCED_SUBS=true
             shift
             ;;
+        --olympus)
+            OLYMPUS_MODE=true
+            TARGET_DIR="${2:-.}"
+            shift 2
+            ;;
         *)
             break
     esac
 done
 
-filename=$1
-genre=${2:-"unknown"}
+if [ "$OLYMPUS_MODE" = "true" ]; then
+    # Olympus mode: process directory, no genre argument needed
+    dirname=$TARGET_DIR
+else
+    filename=$1
+    genre=${2:-"unknown"}
+fi
 # Handle special cases for Modern and Retro genres
 if [[ "$genre" == "Modern" || "$genre" == "Retro" ]]; then
     METADATA_GENRE="Family"
