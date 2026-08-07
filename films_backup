@@ -1,20 +1,43 @@
-sudo rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/  /media/pi/Caravan/films/ 
-sudo chown -R minidlna /media/pi/Caravan 
-sudo chgrp -R minidlna /media/pi/Caravan 
+#!/bin/bash
+
+# Usage: ./films_backup [--lucy]
+#   --lucy    Use Lucy's backup path (/media/pi/Lucy) instead of default (/media/pi/Caravan)
+
+LUCY_MODE=false
+BACKUP_PATH="/media/pi/Caravan"
+CHOWN_USER="minidlna"
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --lucy)
+            LUCY_MODE=true
+            BACKUP_PATH="/media/pi/Lucy"
+            CHOWN_USER="pi"
+            shift
+            ;;
+        *)
+            break
+    esac
+done
+
+echo "Backup destination: $BACKUP_PATH/films/"
+rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/ "$BACKUP_PATH/films/"
+sudo chown -R $CHOWN_USER "$BACKUP_PATH"
+sudo chgrp -R $CHOWN_USER "$BACKUP_PATH"
 
 # find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | while read n; do
 # 	m=$(echo "$n"|sed 's/\/mnt\/HDD\///')
 # 	if [[ "$n" != *"tmp"* && "$n" != *"compiled"* && "$n" != *"files"* && "$n" != *"Go Pros"* && "$n" != *"PI backup"* ]]; then
 # 		if [[ "$n" != *"lost"* && "$n" != *"other"* && "$n" != *"olympus_tg4"* && "$n" != *"iPhones"* && "$n" != *"Trash"* && "$n" != *"iTunes"* ]]; then
-# 			echo "rsync'ing" "$n/" "/media/pi/Caravan/$m/"
-# 			mkdir -p "/media/pi/Caravan/$m/"
-# 			rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" "$n/" /media/pi/Caravan/"$m"/
+# 			echo "rsync'ing" "$n/" "$BACKUP_PATH/$m/"
+# 			mkdir -p "$BACKUP_PATH/$m/"
+# 			rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" "$n/" "$BACKUP_PATH/$m"/
 # 		fi
 # 	fi
 # done
 
-# rsync --archive --progress --delete --delete-excluded --exclude "*DS_Store*" 
-# --exclude /compiled_videos --exclude /photos --exclude /other_photos --exclude /files 
-# --exclude "/Go Pros" --exclude /lost+found --exclude /olympus_tg4 --exclude /iPhones 
-# --exclude "/.Trash*" /mnt/HDD/ /media/pi/Caravan/
+# rsync --archive --progress --delete --delete-excluded --exclude "*DS_Store*"
+# --exclude /compiled_videos --exclude /photos --exclude /other_photos --exclude /files
+# --exclude "/Go Pros" --exclude /lost+found --exclude /olympus_tg4 --exclude /iPhones
+# --exclude "/.Trash*" /mnt/HDD/ $BACKUP_PATH/
 
