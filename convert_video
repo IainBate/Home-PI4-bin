@@ -1,22 +1,28 @@
 #!/bin/bash
 
-# Use Case:
-# - Default: Identical to convert_video (h264_v4l2m2m)
-# - No GPU: Uses libx264 (triggered by -n or if primary fails)
-# - 1080p: Adds scale=1920:1080 filter (triggered by -s)
-# - Audio: Selection of stream index (triggered by -a)
-# - Subtitles: Hard-encoding / no-strip (triggered by -h)
-# - Forced subtitles: Include only forced UK/English subs (triggered by --forced)
-# - Colon: Replace dashes with colons in title (triggered by -c)
+#!/bin/bash
 
-# Usage: ./combined_convert_video [options] <filename> [genre]
+# Use Case:
+# - Default: GPU encoding (h264_v4l2m2m), outputs to /mnt/HDD/films/{genre}/
+# - No GPU: Uses libx264 (triggered by -n or if primary fails)
+# - 1080p scaling: Adds scale=1920:1080 filter (triggered by -s)
+# - Audio selection: Stream index (triggered by -a)
+# - Subtitles: Hard-encoding / no-strip (triggered by -h or --forced)
+# - Colon replacement: In filename and metadata (triggered by -c)
+
+# Usage: ./convert_video [options] <filename> [genre]
 # Options:
 #   -n, --no-gpu      Force software encoding (libx264)
 #   -s, --1080p       Scale 2160p down to 1080p
-#   -a, --audio <id> Specify audio stream index (default: 0)
-#   -h, --hard_sub   Hard encode subtitles (removes -sn filter)
-#   --forced         Include only forced UK/English subtitles (hard-encoded)
-#   -c, --colon      Replace dashes with colons in filename and metadata
+#   -a, --audio <id>  Specify audio stream index (default: 0)
+#   -h, --hard_sub    Hard encode all subtitles
+#   --forced          Include only forced UK/English subtitles (hard-encoded)
+#   -c, --colon       Replace dashes with colons in filename and metadata
+
+# Legacy script equivalents:
+#   ./convert_video_just_HD <file>             => ./convert_video <file>
+#   ./convert_video_without_GPU_just_HD <file> => ./convert_video -n <file>
+#   ./convert_video_both_HD_and_iPad <file>    => ./convert_video <file> (HD only, iPad obsolete)
 
 # Variables
 OUTPUT_ENC="h264_v4l2m2m"
