@@ -79,11 +79,12 @@ done
 
 if [ "$OLYMPUS_MODE" = "true" ]; then
     # Olympus mode: process directory, no genre argument needed
-    dirname=$TARGET_DIR
+    dirname="$TARGET_DIR"
 else
     filename=$1
     genre=${2:-"unknown"}
 fi
+
 # Handle special cases for Modern and Retro genres
 if [[ "$genre" == "Modern" || "$genre" == "Retro" ]]; then
     METADATA_GENRE="Family"
@@ -92,11 +93,54 @@ else
     METADATA_GENRE="$genre"
     DEST_PATH="$genre"
 fi
+
 if [ "$HARD_SUB" = "true" ] && [ "$FORCED_SUBS" = "true" ]; then
     echo "Error: Cannot use both -h/--hard_sub and --forced together"
     exit 1
 fi
 
+# --- Olympus Mode Processing ---
+if [ "$OLYMPUS_MODE" = "true" ]; then
+    echo "Processing Olympus .MOV files in directory: $dirname"
+
+    # Change to target directory
+    cd "$dirname" || exit 1
+
+    # Process all .MOV files
+    for file in *.MOV; do
+        [ -e "$file" ] || continue
+
+        PID=$$
+        filename="$file"
+        OUTPUT_ENC="libx264"  # Olympus mode always uses libx264
+
+        # Extract date from file modification time for naming
+        file_date=$(date -r "$filename" "+%d_%m_%Y")
+        new_filename="Movie ${file_date}.mp4"
+
+        echo "Processing: $filename -> $new_filename"
+
+        touch -r "$filename" .timestamp_$PID
+
+        # Build and run ffmpeg command (no scaling, date-based naming)
+        ffmpeg -y -i "$filename" -threads 4 -map_metadata 0 -map 0:v:0 -c:v libx264 -crf 21 -map 0:a:0 -q:a 1 "$new_filename" </dev/null
+
+        # Fix timestamp
+        touch -r .timestamp_$PID "$new_filename"
+
+        # Remove original if conversion succeeded
+        if [ $? -eq 0 ]; then
+            rm -v "$filename"
+        fi
+
+        rm -f .timestamp_$PID
+    done
+
+    echo "Olympus processing complete."
+    exit 0
+fi
+
+# --- Standard File Mode Processing ---
 if [ -z "$filename" ]; then
     echo "Usage: $0 [-n] [-s] [-a <id>] [--hard_sub | --forced] [-c] <filename> [genre]"
     echo ""
