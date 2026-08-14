@@ -1,24 +1,28 @@
 #!/bin/bash
 
-#!/bin/bash
-
 # Use Case:
 # - Default: GPU encoding (h264_v4l2m2m), outputs to /mnt/HDD/films/{genre}/
 # - No GPU: Uses libx264 (triggered by -n or if primary fails)
 # - 1080p scaling: Adds scale=1920:1080 filter (triggered by -s)
 # - Audio selection: Stream index (triggered by -a)
-# - Subtitles: Hard-encoding / no-strip (triggered by -h or --forced)
+# - Subtitles: Hard-encode or include forced English subs
 # - Colon replacement: In filename and metadata (triggered by -c)
 # - Olympus mode: Batch process .MOV files with date-based naming (triggered by --olympus)
 
-# Usage: ./convert_video [options] <filename> [genre]
+# Usage: ./convert_video [options] <filename> [title] <genre>
+#        ./convert_video [options] <filename> <genre>
 #        ./convert_video --olympus <directory>
+#
+# Arguments:
+#   With 2 args: <filename> <genre> - Original behavior
+#   With 3 args: <filename> <title> <genre> - Title used for output filename and metadata
+#
 # Options:
 #   -n, --no-gpu      Force software encoding (libx264)
 #   -s, --1080p       Scale 2160p down to 1080p
 #   -a, --audio <id>  Specify audio stream index (default: 0)
 #   -h, --hard_sub    Hard encode all subtitles
-#   --forced          Include only forced UK/English subtitles (hard-encoded)
+#   --forced          Include only forced English subtitles without prompting
 #   -c, --colon       Replace dashes with colons in filename and metadata
 #   --olympus         Olympus .MOV batch mode (date-based naming, libx264)
 
@@ -82,7 +86,38 @@ if [ "$OLYMPUS_MODE" = "true" ]; then
     dirname="$TARGET_DIR"
 else
     filename=$1
-    genre=${2:-"unknown"}
+
+    # Handle 2 or 3 arguments for standard mode
+    if [[ -z "$filename" ]]; then
+        echo "Usage: $0 [-n] [-s] [-a <id>] [--hard_sub | --forced] [-c] <filename> [title] <genre>"
+        echo ""
+        echo "Arguments:"
+        echo "  2 args: <filename> <genre>          - Original behavior"
+        echo "  3 args: <filename> <title> <genre>  - Title used for output filename and metadata"
+        echo ""
+        echo "Options:"
+        echo "  -n, --no-gpu      Force software encoding (libx264)"
+        echo "  -s, --1080p       Scale 2160p down to 1080p"
+        echo "  -a, --audio <id>  Specify audio stream index (default: 0)"
+        echo "  --hard_sub        Hard encode all subtitles"
+        echo "  --forced          Include only forced English subtitles without prompting"
+        echo "  -c, --colon       Replace dashes with colons in filename and metadata"
+        exit 1
+    fi
+
+    if [[ $# -eq 2 ]]; then
+        # 2 arguments: filename genre (original behavior)
+        genre=$2
+        USE_THREE_ARG_MODE=false
+    elif [[ $# -ge 3 ]]; then
+        # 3+ arguments: filename title genre (new behavior)
+        output_title="$2"
+        genre="$3"
+        USE_THREE_ARG_MODE=true
+    else
+        echo "Error: At least filename argument required"
+        exit 1
+    fi
 fi
 
 # Handle special cases for Modern and Retro genres
@@ -141,18 +176,6 @@ if [ "$OLYMPUS_MODE" = "true" ]; then
 fi
 
 # --- Standard File Mode Processing ---
-if [ -z "$filename" ]; then
-    echo "Usage: $0 [-n] [-s] [-a <id>] [--hard_sub | --forced] [-c] <filename> [genre]"
-    echo ""
-    echo "Options:"
-    echo "  -n, --no-gpu      Force software encoding (libx264)"
-    echo "  -s, --1080p       Scale 2160p down to 1080p"
-    echo "  -a, --audio <id>  Specify audio stream index (default: 0)"
-    echo "  --hard_sub        Hard encode all subtitles"
-    echo "  --forced          Include only forced UK/English subtitles (hard-encoded)"
-    echo "  -c, --colon       Replace dashes with colons in filename and metadata"
-    exit 1
-fi
 
 # --- Preparation ---
 PID=$$
@@ -160,21 +183,30 @@ filename1=$(basename "$filename")
 prefix=$(echo "${filename1%.*}")
 prefix1=$(echo "${filename%.*}")
 
-# Replace dashes with colons if requested
-if [ "$REPLACE_COLON" = "true" ]; then
-    prefix_colon=$(echo "$prefix" | sed 's/ -/:/')
+# Determine output title and prefix based on argument mode
+if [ "$USE_THREE_ARG_MODE" = "true" ]; then
+    # 3-arg mode: use provided title for output filename and metadata
+    output_prefix="$output_title"
+    if [ "$REPLACE_COLON" = "true" ]; then
+        output_prefix=$(echo "$output_title" | sed 's/ -/:/')
+    fi
 else
-    prefix_colon="$prefix"
+    # 2-arg mode: original behavior - use input filename without extension
+    if [ "$REPLACE_COLON" = "true" ]; then
+        output_prefix=$(echo "$prefix" | sed 's/ -/:/')
+    else
+        output_prefix="$prefix"
+    fi
 fi
 
-new_filename="${prefix_colon}.mp4"
-new_filename_HD="${prefix_colon}_HD.mp4"
-new_filename_iPad="${prefix_colon}_iPad.mp4"
+new_filename="${output_prefix}.mp4"
+new_filename_HD="${output_prefix}_HD.mp4"
+new_filename_iPad="${output_prefix}_iPad.mp4"
 
 echo "Original file name: $filename"
 echo "Prefix: $prefix"
-if [ "$REPLACE_COLON" = "true" ]; then
-    echo "New prefix (dashes replaced): $prefix_colon"
+if [ -n "$output_title" ]; then
+    echo "Output title: $output_title"
 fi
 echo "New file names: ${new_filename_iPad} ${new_filename_HD} ${new_filename}"
 
@@ -183,38 +215,282 @@ target_bitrate=2000
 ffmpeg -i "$filename" 2>&1 | grep -E "Duration|bitrate" || true
 echo "Target bitrate: ${target_bitrate}k"
 
-# Handle forced subtitles - detect and map only forced English/UK subtitle streams
-FORCED_SUB_MAP=""
-SUBTITLE_CODEC=""
-if [ "$FORCED_SUBS" = "true" ]; then
-    echo "Looking for forced UK/English subtitle streams..."
-    # Get list of subtitle streams from ffmpeg output
+# --- Subtitle Detection and Processing ---
+
+# Function to check if a subtitle stream is English and forced
+check_english_forced_sub() {
+    local stream_info="$1"
+
+    # Check if it's an English forced subtitle stream
+    # Pattern: Stream #0:X(eng): Subtitle: ... (forced)
+    if echo "$stream_info" | grep -q "Subtitle.* eng .*forced\|Subtitle.*forced.*eng"; then
+        return 0
+    fi
+
+    # Alternative pattern matching
+    if echo "$stream_info" | grep -E "Stream #0:[0-9]+\(eng\): Subtitle:.*forced" > /dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Function to get subtitle stream info and count forced English subs
+analyze_subtitles() {
+    local filename="$1"
+
+    echo "Analyzing subtitles..."
+
+    # Get all subtitle streams info
     SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1)
 
-    # Look for lines like: Stream #0:2(eng): Subtitle: subrip (srt) (default) (forced)
-    FORCED_STREAM_LINE=$(echo "$SUBTITLE_INFO" | grep "Subtitle.*forced" | head -1)
+    FORCED_ENG_SUBS=()
+    ALL_SUB_STREAMS=()
 
-    if [ -n "$FORCED_STREAM_LINE" ]; then
-        # Extract stream index from line like "Stream #0:2(eng): Subtitle..."
-        STREAM_INDEX=$(echo "$FORCED_STREAM_LINE" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+    # Extract all subtitle stream lines
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "Subtitle:"; then
+            ALL_SUB_STREAMS+=("$line")
 
-        if [ -n "$STREAM_INDEX" ]; then
-            echo "Found forced subtitle stream at index $STREAM_INDEX"
-            FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
-            SUBTITLE_CODEC="-metadata:s:s:0 language=eng"
-        else
-            echo "Warning: Could not parse stream index from forced subtitle line"
+            # Check if this is a forced English subtitle
+            if check_english_forced_sub "$line"; then
+                FORCED_ENG_SUBS+=("$line")
+            fi
+        fi
+    done <<< "$SUBTITLE_INFO"
+
+    echo "Found ${#ALL_SUB_STREAMS[@]} subtitle stream(s)"
+
+    # Check for external SRT files
+    dir=$(dirname "$filename")
+    base="${filename1%.*}"
+    EXTERNAL_SRT_FILES=()
+
+    # Look for .srt files in same directory matching the video basename or generic srt patterns
+    while IFS= read -r -d '' srt_file; do
+        if [[ "$srt_file" != "" ]]; then
+            EXTERNAL_SRT_FILES+=("$srt_file")
+        fi
+    done < <(find "$dir" -maxdepth 1 -type f -name "*.srt" -print0 2>/dev/null | sort -z)
+
+    echo "Found ${#EXTERNAL_SRT_FILES[@]} external subtitle file(s)"
+
+    # Calculate forced coverage if we have forced English subs
+    FORCED_COVERAGE_PCT=0
+
+    if [[ ${#FORCED_ENG_SUBS[@]} -gt 0 ]]; then
+        # Get video duration in seconds
+        VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filename" 2>/dev/null)
+
+        if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "N/A" ]]; then
+            # Extract forced subtitle durations using ffprobe packet data
+            TOTAL_FORCED_DURATION=0
+
+            for sub_stream in "${FORCED_ENG_SUBS[@]}"; do
+                # Extract stream index from line like "Stream #0:2(eng): Subtitle..."
+                STREAM_IDX=$(echo "$sub_stream" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+
+                if [[ -n "$STREAM_IDX" ]]; then
+                    # Get subtitle packet times for this stream
+                    PACKET_DATA=$(ffprobe -v error -select_streams s:$STREAM_IDX -show_entries packet=pts_time,duration -of csv=p=0 "$filename" 2>/dev/null)
+
+                    while IFS=',' read -r pts duration; do
+                        if [[ -n "$duration" && "$duration" != "N/A" ]]; then
+                            TOTAL_FORCED_DURATION=$(echo "$TOTAL_FORCED_DURATION + $duration" | bc 2>/dev/null || echo "$TOTAL_FORCED_DURATION")
+                        fi
+                    done <<< "$PACKET_DATA"
+                fi
+            done
+
+            if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
+                FORCED_COVERAGE_PCT=$(echo "scale=1; ($TOTAL_FORCED_DURATION / $VIDEO_DURATION) * 100" | bc 2>/dev/null || echo "0")
+            fi
+
+            # Round to integer for display
+            FORCED_COVERAGE_PCT_INT=$(printf "%.0f" "$FORCED_COVERAGE_PCT" 2>/dev/null || echo "0")
+
+            if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
+                echo "Forced English subtitle coverage: ${FORCED_COVERAGE_PCT}% of video"
+            fi
+        fi
+    fi
+
+    # Store results for later use
+    FORCED_ENG_COUNT=${#FORCED_ENG_SUBS[@]}
+}
+
+# Function to prompt user about low-coverage forced subtitles
+prompt_for_subtitles() {
+    local coverage="$1"
+
+    echo ""
+    echo "English forced subtitle coverage: ${coverage}% of video runtime"
+
+    if (( $(echo "$coverage < 15" | bc -l 2>/dev/null || echo "1") )); then
+        echo "Note: Low coverage may indicate director commentary rather than foreign language support."
+        echo ""
+        read -p "Include these English subtitles? [Y/n] " response
+
+        case "$response" in
+            [nN]|[nN][oO])
+                INCLUDE_SUBTITLES=false
+                return 0
+                ;;
+            *)
+                INCLUDE_SUBTITLES=true
+                return 1
+                ;;
+        esac
+    else
+        echo "Coverage is above threshold (15%), including forced English subtitles by default."
+        INCLUDE_SUBTITLES=true
+        return 1
+    fi
+}
+
+# --- Subtitle Processing ---
+FORCED_SUB_MAP=""
+SUBTITLE_CODEC=""
+INCLUDE_SUBTITLES=false
+
+if [ "$HARD_SUB" = "true" ]; then
+    # Hard-encode all subtitles (existing behavior)
+    echo "Hard-encoding all embedded subtitles..."
+elif [ "$FORCED_SUBS" = "true" ]; then
+    # User explicitly requested forced subtitles - use without prompting
+    echo "Including forced English subtitles as requested..."
+
+    if [[ ${#ALL_SUB_STREAMS[@]} -gt 0 ]]; then
+        # Find first English forced subtitle stream
+        for sub_line in "${ALL_SUB_STREAMS[@]}"; do
+            if check_english_forced_sub "$sub_line"; then
+                STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                if [[ -n "$STREAM_IDX" ]]; then
+                    FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
+                    SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
+                    INCLUDE_SUBTITLES=true
+                    echo "Found forced English subtitle stream at index $STREAM_IDX"
+                    break
+                fi
+            fi
+        done
+
+        if [ "$INCLUDE_SUBTITLES" = false ]; then
+            # Try any English subtitle as fallback
+            for sub_line in "${ALL_SUB_STREAMS[@]}"; do
+                if echo "$sub_line" | grep -q "eng"; then
+                    STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                    if [[ -n "$STREAM_IDX" ]]; then
+                        FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
+                        SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
+                        INCLUDE_SUBTITLES=true
+                        echo "Found English subtitle stream at index $STREAM_IDX (not marked forced)"
+                        break
+                    fi
+                fi
+            done
+        fi
+
+        if [ "$INCLUDE_SUBTITLES" = false ]; then
+            echo "Warning: No English subtitle streams found"
         fi
     else
-        # No forced subtitles found, try to find any English subtitle as fallback
-        ENG_STREAM_LINE=$(echo "$SUBTITLE_INFO" | grep "Subtitle:" | head -1)
-        if [ -n "$ENG_STREAM_LINE" ]; then
-            STREAM_INDEX=$(echo "$ENG_STREAM_LINE" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
-            echo "No forced subtitles found, using first subtitle stream at index $STREAM_INDEX"
-            FORCED_SUB_MAP="-map 0:s:$STREAM_INDEX -c:s mov_text"
-            SUBTITLE_CODEC="-metadata:s:s:0 language=eng"
+        echo "Warning: No subtitle streams found in input file"
+    fi
+
+    # Check for external SRT files and append to mapping
+    if [[ ${#EXTERNAL_SRT_FILES[@]} -gt 0 ]]; then
+        for srt_file in "${EXTERNAL_SRT_FILES[@]}"; do
+            echo "Found external subtitle: $(basename "$srt_file")"
+        done
+
+        # For now, just note them - we'll add them as a separate stream if needed
+    fi
+else
+    # Auto-detect mode - analyze subtitles and prompt if needed
+    analyze_subtitles "$filename"
+
+    if [[ ${#FORCED_ENG_SUBS[@]} -gt 0 ]]; then
+        echo ""
+
+        # Prompt user (unless coverage is high)
+        if (( $(echo "$FORCED_COVERAGE_PCT >= 15" | bc -l 2>/dev/null || echo "0") )); then
+            INCLUDE_SUBTITLES=true
+            echo "Forced English subtitles detected with ${FORCED_COVERAGE_PCT}% coverage."
+            echo "Including automatically (above 15% threshold)."
         else
-            echo "Warning: No subtitle streams found in input file"
+            prompt_for_subtitles "$FORCED_COVERAGE_PCT"
+        fi
+
+        # Map the first forced English subtitle stream if we decided to include
+        if [ "$INCLUDE_SUBTITLES" = true ]; then
+            for sub_line in "${ALL_SUB_STREAMS[@]}"; do
+                if check_english_forced_sub "$sub_line"; then
+                    STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                    if [[ -n "$STREAM_IDX" ]]; then
+                        FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
+                        SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
+                        echo "Mapping forced English subtitle stream at index $STREAM_IDX"
+                        break
+                    fi
+                fi
+            done
+
+            # If no forced stream found but we have English streams, use first one
+            if [[ -z "$FORCED_SUB_MAP" ]]; then
+                for sub_line in "${ALL_SUB_STREAMS[@]}"; do
+                    if echo "$sub_line" | grep -q "eng"; then
+                        STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                        if [[ -n "$STREAM_IDX" ]]; then
+                            FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
+                            SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
+                            echo "Mapping English subtitle stream at index $STREAM_IDX"
+                            break
+                        fi
+                    fi
+                done
+            fi
+
+            # Add external SRT files if present
+            if [[ ${#EXTERNAL_SRT_FILES[@]} -gt 0 ]]; then
+                SRT_COUNT=${#EXTERNAL_SRT_FILES[@]}
+                echo "Including $SRT_COUNT external subtitle file(s)"
+
+                # For each external SRT, add as a stream
+                for i in "${!EXTERNAL_SRT_FILES[@]}"; do
+                    srt_path="${EXTERNAL_SRT_FILES[$i]}"
+                    FORCED_SUB_MAP="$FORCED_SUB_MAP -attach \"$srt_path\" -metadata:s:t:$((i)) mimetype=application/x-subrip"
+                done
+
+                # Also hard-encode the first external SRT if desired
+                # This requires using the subtitles filter
+                FIRST_SRT="${EXTERNAL_SRT_FILES[0]}"
+                echo "Note: External subtitle $(basename "$FIRST_SRT") will be included as data stream"
+            fi
+        fi
+    else
+        echo "No English forced subtitles detected."
+        INCLUDE_SUBTITLES=false
+
+        # Check for external SRT files anyway
+        if [[ ${#EXTERNAL_SRT_FILES[@]} -gt 0 ]]; then
+            echo ""
+            echo "External subtitle file(s) found:"
+            for srt_file in "${EXTERNAL_SRT_FILES[@]}"; do
+                echo "  - $(basename "$srt_file")"
+            done
+
+            read -p "Include these external subtitles? [y/N] " response
+            case "$response" in
+                [yY]|[yY][eE][sS])
+                    INCLUDE_SUBTITLES=true
+                    # Map each SRT as a data stream
+                    for i in "${!EXTERNAL_SRT_FILES[@]}"; do
+                        srt_path="${EXTERNAL_SRT_FILES[$i]}"
+                        FORCED_SUB_MAP="$FORCED_SUB_MAP -attach \"$srt_path\" -metadata:s:t:$((i)) mimetype=application/x-subrip"
+                    done
+                    ;;
+            esac
         fi
     fi
 fi
@@ -224,13 +500,18 @@ touch -r "$filename" .timestamp_$PID
 # Helper function to generate the ffmpeg command string
 build_cmd() {
     local enc=$1
-    # Use colon-prefixed prefix for metadata title
-    local meta_title="$prefix_colon"
+    # Use output prefix for metadata title (use original prefix if not in 3-arg mode)
+    if [ "$USE_THREE_ARG_MODE" = "true" ]; then
+        local meta_title="$output_prefix"
+    else
+        local meta_title="$prefix"
+    fi
 
     # Build subtitle options based on mode
     local subtitle_opts="-sn"
-    if [ "$FORCED_SUBS" = "true" ] && [ -n "$FORCED_SUB_MAP" ]; then
-        # Use forced subtitles when --forced is specified and stream found
+
+    if [ "$INCLUDE_SUBTITLES" = "true" ] && [ -n "$FORCED_SUB_MAP" ]; then
+        # Use detected/mapped subtitles when enabled
         subtitle_opts="$FORCED_SUB_MAP $SUBTITLE_CODEC"
     elif [ "$HARD_SUB" = "true" ]; then
         # Hard encode all subtitles (for backwards compatibility with -h)
@@ -268,7 +549,7 @@ done
 # --- Finalization ---
 touch -r .timestamp_$PID tmp_$PID.mp4
 
-# Create destination directory if needed (use colon-prefixed prefix for path)
+# Create destination directory if needed (use output prefix for path in 3-arg mode)
 mkdir -p /mnt/HDD/films/"$DEST_PATH"
 
 if [ "$REPLACE_COLON" = "true" ]; then
