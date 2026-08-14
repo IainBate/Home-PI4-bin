@@ -504,7 +504,7 @@ build_cmd() {
     if [ "$USE_THREE_ARG_MODE" = "true" ]; then
         local meta_title="$output_prefix"
     else
-        local meta_title="$prefix_colon"
+        local meta_title="$prefix"
     fi
 
     # Build subtitle options based on mode
