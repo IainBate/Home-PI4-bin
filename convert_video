@@ -309,7 +309,7 @@ analyze_subtitles() {
             # Round to integer for display
             FORCED_COVERAGE_PCT_INT=$(printf "%.0f" "$FORCED_COVERAGE_PCT" 2>/dev/null || echo "0")
 
-            if [[ ${#EXTERNAL_SRT_FILES[@]} -gt 0 ]]; then
+            if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
                 echo "Forced English subtitle coverage: ${FORCED_COVERAGE_PCT}% of video"
             fi
         fi
