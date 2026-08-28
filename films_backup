@@ -21,7 +21,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 echo "Backup destination: $BACKUP_PATH/films/"
-rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/ "$BACKUP_PATH/films/"
+sudo rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/ "$BACKUP_PATH/films/"
 sudo chown -R $CHOWN_USER "$BACKUP_PATH"
 sudo chgrp -R $CHOWN_USER "$BACKUP_PATH"
 
