@@ -1,28 +1,88 @@
 #!/bin/bash
 
-udisksctl mount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
-udisksctl mount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
+MSMTP_CONF="/home/pi/.msmtprc"
+ALERT_TO="iain.bate@gmail.com"
+HEALTHCHECK_URL="https://hc-ping.com/7e663dd8-7b68-48fe-83d8-664b4e8c7837"
+
+FAILURES=()
+WARNINGS=()
+
+run() {
+	local desc="$1"; shift
+	"$@"
+	local rc=$?
+	if [ $rc -eq 24 ]; then
+		WARNINGS+=("[$desc] rsync exit 24 (source file vanished mid-transfer, usually harmless): $*")
+	elif [ $rc -ne 0 ]; then
+		FAILURES+=("[$desc] exit $rc: $*")
+	fi
+	return 0
+}
+
+run "mount HDD_photos" udisksctl mount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
+run "mount HDD_backup" udisksctl mount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
 sleep 10
 
 echo "Backing up home automation, bin, etc"
-rsync --archive --delete --progress /home/pi/home_automation/ /mnt/HDD/files/home_automation/
-rsync --archive --delete --progress /home/pi/ /mnt/HDD/files/usr/
-rsync --archive --delete --progress /home/pi/bin/ /mnt/HDD/files/bin/
-rsync --archive --delete --progress /etc/ /mnt/HDD/files/etc/
+run "rsync home_automation" rsync --archive --delete --progress /home/pi/home_automation/ /mnt/HDD/files/home_automation/
+run "rsync /home/pi -> files/usr" rsync --archive --delete --progress /home/pi/ /mnt/HDD/files/usr/
+run "rsync bin" rsync --archive --delete --progress /home/pi/bin/ /mnt/HDD/files/bin/
+run "rsync /etc" rsync --archive --delete --progress /etc/ /mnt/HDD/files/etc/
 
 echo "Backing up the HDD drive"
-find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | while read n; do
+while read -r n; do
 	m=$(echo "$n"|sed 's/\/mnt\/HDD\///')
 	if [[ "$n" != *"films"* ]]; then
 		echo "rsync'ing" "$n/" "/mnt/HDD_backup/$m/"
 		mkdir -p "/mnt/HDD_backup/$m/"
-		rsync --archive --delete --progress --delete-excluded "$n/" /mnt/HDD_backup/"$m"/
+		run "rsync HDD/$m -> HDD_backup" rsync --archive --delete --progress --delete-excluded "$n/" /mnt/HDD_backup/"$m"/
 	fi
-done
-rsync --archive --delete --progress /mnt/HDD_photos/photos/ /mnt/HDD_backup/photos/
+done < <(find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*')
+
+run "rsync photos" rsync --archive --delete --progress /mnt/HDD_photos/photos/ /mnt/HDD_backup/photos/
 
 sleep 10
-udisksctl unmount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
-udisksctl unmount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
+run "unmount HDD_photos" udisksctl unmount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
+run "unmount HDD_backup" udisksctl unmount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
 sleep 10
 
+if [ ${#FAILURES[@]} -gt 0 ]; then
+	SUBJECT="[PI4] home_backup FAILED - $(date '+%Y-%m-%d %H:%M')"
+	{
+		echo "To: $ALERT_TO"
+		echo "Subject: $SUBJECT"
+		echo
+		echo "SUMMARY: home_backup on HomePI4 hit ${#FAILURES[@]} failure(s) at $(date '+%Y-%m-%d %H:%M %Z')."
+		echo
+		echo "FAILED STEPS:"
+		for f in "${FAILURES[@]}"; do echo "  - $f"; done
+		if [ ${#WARNINGS[@]} -gt 0 ]; then
+			echo
+			echo "WARNINGS (non-fatal):"
+			for w in "${WARNINGS[@]}"; do echo "  - $w"; done
+		fi
+		echo
+		echo "ENVIRONMENT:"
+		echo "  Host: homepi4  (ssh pi@100.102.156.19)"
+		echo "  Script: /home/pi/bin/home_backup"
+		echo "  Full run log: /tmp/home_backup_logfile (on the Pi)"
+		echo "  Local git mirror: ~/Home_PI4_bin/home_backup (github.com/IainBate/Home-PI4-bin)"
+		echo
+		echo "SUGGESTED NEXT STEP:"
+		echo "  Paste this email into Claude Code in the Home_PI4_bin project and ask it to"
+		echo "  investigate. It already knows how to reach the Pi (ssh pi@100.102.156.19"
+		echo "  via Tailscale) and has reviewed this script and the drive/fstab layout, so it"
+		echo "  can go straight to diagnosing the failed step(s) above."
+		echo
+		echo "--- last 60 lines of /tmp/home_backup_logfile ---"
+		tail -n 60 /tmp/home_backup_logfile 2>/dev/null
+	} | msmtp --file="$MSMTP_CONF" -t
+
+	if [ -n "$HEALTHCHECK_URL" ]; then
+		curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL/fail" -o /dev/null
+	fi
+else
+	if [ -n "$HEALTHCHECK_URL" ]; then
+		curl -fsS -m 10 --retry 3 "$HEALTHCHECK_URL" -o /dev/null
+	fi
+fi
