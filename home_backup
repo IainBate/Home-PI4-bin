@@ -2,7 +2,7 @@
 
 MSMTP_CONF="/home/pi/.msmtprc"
 ALERT_TO="iain.bate@gmail.com"
-HEALTHCHECK_URL=""   # TODO: paste your healthchecks.io ping URL here, e.g. https://hc-ping.com/xxxxxxxx
+HEALTHCHECK_URL="https://hc-ping.com/7e663dd8-7b68-48fe-83d8-664b4e8c7837"
 
 FAILURES=()
 WARNINGS=()
