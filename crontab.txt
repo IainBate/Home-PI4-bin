@@ -39,6 +39,15 @@ MAILTO="iain.bate@gmail.com"
 0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/mg_saic_poller.py --quiet
 */10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/claude_usage_poller.py --quiet
 
+# Solar generation forecast (see home_automation/config.yaml's solar_forecast
+# comments) - config.yaml documented this cron line since the model was
+# first trained, but it was never actually added here, so the dashboard's
+# solar forecast panel had been permanently empty (2026-09-02) - added now.
+# The model itself (data/solar_forecast_model.joblib) still needs a manual
+# `venv/bin/python3 scripts/solar_forecast_trainer.py` re-run occasionally
+# (e.g. weekly) as more historical data accumulates - not yet automated.
+0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/solar_forecast_predictor.py --quiet
+
 # Daily digest of the above pollers' recurring failures (see
 # home_automation/config.yaml's daily_digest_check comments) - only emails
 # when something recurred, at most once a day.
