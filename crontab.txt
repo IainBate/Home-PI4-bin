@@ -32,7 +32,3 @@ MAILTO="iain.bate@gmail.com"
 # home_automation/config.yaml's daily_digest_check comments) - only emails
 # when something recurred, at most once a day.
 0 7 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/daily_digest_check.py --quiet
-
-# Weekly health check of the battery/hot-water daemons and dashboard service
-# (see home_automation/config.yaml's weekly_health_check comments).
-0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
