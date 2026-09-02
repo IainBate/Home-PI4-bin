@@ -19,31 +19,84 @@ run() {
 	return 0
 }
 
-run "mount HDD_photos" udisksctl mount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
-run "mount HDD_backup" udisksctl mount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
-sleep 10
+# Try each mount up to 3 times before giving up. Uses "sudo mount
+# <mount_point>" against the /etc/fstab entry (not "udisksctl mount -b
+# <device>") - confirmed 2026-09-02 that udisksctl requires an interactive
+# polkit authentication agent tied to a controlling terminal, which never
+# exists when this runs from cron (or a non-interactive SSH command), so it
+# failed on every attempt regardless of retries. sudo is passwordless for
+# pi on this Pi (see "sudo -l"), so this needs no agent. If udisksctl
+# silently failed and we only wrote into the mount point directory itself,
+# every rsync below would have quietly filled the SD card with a full copy
+# of the main HDD instead of erroring loudly. A single flaky attempt
+# shouldn't skip a whole backup step, so retry with a pause before treating
+# it as a real failure (which reaches you via the existing FAILURES/email
+# mechanism below).
+mount_with_retry() {
+	local desc="$1" mount_point="$2" attempts=3 i
+	for i in $(seq 1 "$attempts"); do
+		if mountpoint -q "$mount_point"; then
+			return 0
+		fi
+		sudo mount "$mount_point" >/dev/null 2>&1
+		sleep 10
+		if mountpoint -q "$mount_point"; then
+			return 0
+		fi
+		echo "[$desc] mount attempt $i/$attempts did not succeed"
+	done
+	FAILURES+=("[$desc] failed to mount $mount_point after $attempts attempts - skipping steps that write there to avoid filling the SD card")
+	return 1
+}
+
+HDD_PHOTOS_MOUNTED=0
+HDD_BACKUP_MOUNTED=0
+mount_with_retry "mount HDD_photos" /mnt/HDD_photos && HDD_PHOTOS_MOUNTED=1
+mount_with_retry "mount HDD_backup" /mnt/HDD_backup && HDD_BACKUP_MOUNTED=1
 
 echo "Backing up home automation, bin, etc"
 run "rsync home_automation" rsync --archive --delete --progress /home/pi/home_automation/ /mnt/HDD/files/home_automation/
 run "rsync /home/pi -> files/usr" rsync --archive --delete --progress /home/pi/ /mnt/HDD/files/usr/
 run "rsync bin" rsync --archive --delete --progress /home/pi/bin/ /mnt/HDD/files/bin/
-run "rsync /etc" rsync --archive --delete --progress /etc/ /mnt/HDD/files/etc/
+# sudo: /etc contains some root-only-readable files (Samba config,
+	# systemd unit symlinks) that plain "pi" cannot read/preserve -
+	# confirmed 2026-09-02 this was causing "Permission denied"/exit 23
+	# on every run, not just when a drive is missing.
+	run "rsync /etc" sudo rsync --archive --delete --progress /etc/ /mnt/HDD/files/etc/
 
-echo "Backing up the HDD drive"
-while read -r n; do
-	m=$(echo "$n"|sed 's/\/mnt\/HDD\///')
-	if [[ "$n" != *"films"* ]]; then
-		echo "rsync'ing" "$n/" "/mnt/HDD_backup/$m/"
-		mkdir -p "/mnt/HDD_backup/$m/"
-		run "rsync HDD/$m -> HDD_backup" rsync --archive --delete --progress --delete-excluded "$n/" /mnt/HDD_backup/"$m"/
-	fi
-done < <(find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*')
+if [ "$HDD_BACKUP_MOUNTED" -eq 1 ]; then
+	echo "Backing up the HDD drive"
+	while read -r n; do
+		m=$(echo "$n"|sed 's/\/mnt\/HDD\///')
+		if [[ "$n" != *"films"* ]]; then
+			echo "rsync'ing" "$n/" "/mnt/HDD_backup/$m/"
+			mkdir -p "/mnt/HDD_backup/$m/"
+			# "files" is the tree written by the /etc rsync above (now sudo,
+			# so partly root-owned) - needs sudo here too to read it back,
+			# same reasoning as that step.
+			if [ "$m" = "files" ]; then
+				run "rsync HDD/$m -> HDD_backup" sudo rsync --archive --delete --progress --delete-excluded "$n/" /mnt/HDD_backup/"$m"/
+			else
+				run "rsync HDD/$m -> HDD_backup" rsync --archive --delete --progress --delete-excluded "$n/" /mnt/HDD_backup/"$m"/
+			fi
+		fi
+	done < <(find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*')
+else
+	echo "Skipping HDD -> HDD_backup sync: HDD_backup is not mounted"
+fi
 
-run "rsync photos" rsync --archive --delete --progress /mnt/HDD_photos/photos/ /mnt/HDD_backup/photos/
+if [ "$HDD_PHOTOS_MOUNTED" -eq 1 ] && [ "$HDD_BACKUP_MOUNTED" -eq 1 ]; then
+	run "rsync photos" rsync --archive --delete --progress /mnt/HDD_photos/photos/ /mnt/HDD_backup/photos/
+else
+	echo "Skipping photos sync: HDD_photos and/or HDD_backup is not mounted"
+fi
 
 sleep 10
-run "unmount HDD_photos" udisksctl unmount -b /dev/disk/by-uuid/6829575a-6d8a-485e-9d28-0c3349037b18
-run "unmount HDD_backup" udisksctl unmount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
+# Only unmount what we actually mounted - unconditionally unmounting both
+# would log a spurious extra failure on top of the real "failed to mount"
+# one already recorded above, for a drive that was never mounted.
+[ "$HDD_PHOTOS_MOUNTED" -eq 1 ] && run "unmount HDD_photos" sudo umount /mnt/HDD_photos
+[ "$HDD_BACKUP_MOUNTED" -eq 1 ] && run "unmount HDD_backup" sudo umount /mnt/HDD_backup
 sleep 10
 
 echo "Checking films_backup / lucys_backup freshness"
