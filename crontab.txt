@@ -83,3 +83,4 @@ MAILTO="iain.bate@gmail.com"
 # actually wrong. This was documented in the README as already running but
 # had never actually been added here (2026-09-02) - added now.
 0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
+0 3 * * * cd /home/pi/home_automation && bash scripts/encrypt_secrets.sh --quiet

@@ -405,18 +405,28 @@ if [ ! -d /home/pi/home_automation/.git ]; then
 		echo ">>> about piwheels for prebuilt ARM wheels if it seems stuck."
 		(cd /home/pi/home_automation && bash setup_pi.sh) || echo ">>> setup_pi.sh didn't complete (declined its prompt, or a real failure) - re-run 'bash ~/home_automation/setup_pi.sh' by hand once ready. Continuing with the rest of this script either way, since nothing below depends on home_automation."
 
-		# secrets.yaml is gitignored (real credentials, never committed) - the
-		# HDD backup is the only place a copy of it survives. --ignore-existing
-		# means this only fills in files setup_pi.sh's own clone didn't provide
-		# (secrets.yaml, and any other untracked runtime files), never
-		# overwrites anything git just gave you.
+		# secrets.yaml is gitignored (real credentials, never committed in
+		# plaintext). Two backup paths exist now: setup_pi.sh (just run above)
+		# already offered to decrypt secrets.yaml.enc - an encrypted copy that
+		# IS committed to git (see scripts/encrypt_secrets.sh / decrypt_secrets.sh)
+		# - if it came with the clone. The rsync below is the older HDD-backup
+		# fallback; --ignore-existing means it only fills in files neither of
+		# those already provided, never overwrites anything git/decrypt gave you.
 		if [ -d /mnt/HDD/files/usr/home_automation ]; then
 			rsync -a --ignore-existing /mnt/HDD/files/usr/home_automation/ /home/pi/home_automation/
 			echo "Restored any gitignored files (e.g. secrets.yaml) from HDD backup."
 		fi
 		if [ ! -f /home/pi/home_automation/secrets.yaml ]; then
-			echo ">>> secrets.yaml is still missing - copy secrets.yaml.example to"
-			echo ">>> secrets.yaml and fill in real credentials by hand."
+			if [ -f /home/pi/home_automation/secrets.yaml.enc ]; then
+				echo ">>> secrets.yaml is still missing. secrets.yaml.enc (encrypted git"
+				echo ">>> backup) is present - recovery hint: the passphrase is this"
+				echo ">>> Pi's own login password (unless a different one was set)."
+				echo ">>> Run:"
+				echo ">>>   cd ~/home_automation && bash scripts/decrypt_secrets.sh"
+			else
+				echo ">>> secrets.yaml is still missing - copy secrets.yaml.example to"
+				echo ">>> secrets.yaml and fill in real credentials by hand."
+			fi
 		fi
 		echo ">>> secrets.yaml's solaX_cloud_api block (token_id/master_wifisn/"
 		echo ">>> slave_wifisn, feeds scripts/solax_realtime_logger.py) was only"
@@ -586,6 +596,9 @@ echo "  [ ] verify ~/.msmtprc has a real app password, not a placeholder"
 echo "      (STEP 9 - only restores it if the HDD backup already had it)"
 echo "  [ ] verify ~/home_automation/secrets.yaml has real credentials"
 echo "      (STEP 12 - same caveat as above)"
+echo "  [ ] if secrets.yaml is still missing: 'cd ~/home_automation && bash"
+echo "      scripts/decrypt_secrets.sh' (passphrase hint: this Pi's own"
+echo "      login password) before recreating it by hand"
 echo "  [ ] verify secrets.yaml's solaX_cloud_api.token_id is the plain"
 echo "      numeric tokenID from the account's 'Residential API (OLD)'"
 echo "      page (NOT the 'API' page's OAuth2 App Code - see"
