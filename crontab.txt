@@ -20,6 +20,17 @@ MAILTO="iain.bate@gmail.com"
 30 6 * * Mon sudo /home/pi/bin/home_backup >/tmp/home_backup_logfile 2>&1
 30 6 * * * /home/pi/bin/restart_minidlna
 
+# Claude Code login keep-alive (2026-09-02): claude_usage_poller.py below
+# reads THIS machine's own ~/.claude/.credentials.json directly - it stays
+# fresh automatically only if `claude` actually runs here at least once
+# within its ~8h access-token lifetime. Nobody uses `claude` interactively
+# on this headless Pi, so the token was silently going stale between visits
+# (last real use was 2026-09-01, causing a run of HTTP 401 warnings a day
+# later). This trivial no-op prompt exists purely to touch the CLI often
+# enough to keep it refreshed - well under the 8h expiry - with output kept
+# to a small local log rather than stdout, so it doesn't trigger MAILTO.
+0 */4 * * * cd /home/pi/home_automation && { date -Is; /usr/local/bin/claude -p "reply with just: ok"; } >> logs/claude_keepalive.log 2>&1
+
 # Home automation dashboard pollers (see home_automation/config.yaml comments for each).
 # --quiet now also routes their WARNING+ logging to logs/*.log instead of
 # stderr (src/utils/logging_setup.py), so a transient failure here no longer
