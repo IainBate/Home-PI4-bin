@@ -1,0 +1,25 @@
+# pi's crontab on HomePI4 - source of truth, installed by fresh_install.sh via
+# `crontab ~/bin/crontab.txt`. Edit here (and commit) rather than editing the
+# live crontab directly with `crontab -e`, so it doesn't silently drift from
+# what a fresh install would recreate.
+#
+# NOTE (2026-09-02): a line that used to be here -
+#   35 6 * * * sudo ufw allow 8200/tcp && sudo ufw allow 1900/udp
+# has been removed. ufw was never actually installed on this system (the
+# firewalling that exists is nftables rules managed by Tailscale itself), so
+# this line has been silently failing every day since it was added. minidlna
+# and Samba both work fine on the LAN without it - there's no firewall
+# blocking those ports in the first place.
+
+MAILTO="iain.bate@gmail.com"
+
+0 6 * * Mon sudo /sbin/shutdown -r now
+5 6 * * Mon sudo /home/pi/bin/update_PI
+10 5 * * Mon sudo /home/pi/bin/backup_PI >/tmp/backup_PI_logfile 2>&1
+25 6 * * Mon sudo rm -rf /mnt/HDD/films/tmp/*
+30 6 * * Mon sudo /home/pi/bin/home_backup >/tmp/home_backup_logfile 2>&1
+30 6 * * * /home/pi/bin/restart_minidlna
+
+# Home automation dashboard pollers (see home_automation/config.yaml comments for each)
+0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/mg_saic_poller.py --quiet
+*/10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/claude_usage_poller.py --quiet
