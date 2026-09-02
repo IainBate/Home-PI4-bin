@@ -48,6 +48,14 @@ MAILTO="iain.bate@gmail.com"
 # from solar_forecast_trainer.py's own docstring) - previously manual-only.
 0 3 * * 0 cd /home/pi/home_automation && venv/bin/python3 scripts/solar_forecast_trainer.py --quiet
 
+# Evening battery SoC prediction (see home_automation/config.yaml's
+# battery_evening_prediction comments) - hotwater_automation_core.py's
+# force-heat check prefers this over a live SoC reading. Documented in the
+# script's own docstring and config.yaml since it was written, but never
+# actually added here, so the prediction file was going stale/unwritten
+# (2026-09-02) - added now, shortly before the default trigger_hour (21:30).
+55 20 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/battery_evening_predictor.py --quiet
+
 # Daily digest of the above pollers' recurring failures (see
 # home_automation/config.yaml's daily_digest_check comments) - only emails
 # when something recurred, at most once a day.
