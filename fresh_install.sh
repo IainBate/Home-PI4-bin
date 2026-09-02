@@ -403,10 +403,51 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 13: minidlna config. media_dir points at /mnt/HDD/films only -
+# STEP 13: heating_automation. A second, separate private repo (Fujitsu
+# Airstage AC control) - unlike home_automation it has no setup_pi.sh of
+# its own and no systemd service or cron entry: it's a manual CLI tool
+# (venv/bin/python scripts/ac_control.py ...), not a background daemon, so
+# this step just clones it, builds its venv, and restores its gitignored
+# config.yaml (device credentials) the same way STEP 12 does for
+# home_automation's secrets.
+# ---------------------------------------------------------------------------
+echo "--- STEP 13: heating_automation ---"
+if [ ! -d /home/pi/heating_automation/.git ]; then
+	if git clone git@github.com:IainBate/heating-automation.git /home/pi/heating_automation; then
+		(
+			cd /home/pi/heating_automation
+			python3 -m venv venv
+			venv/bin/pip install --upgrade pip
+			venv/bin/pip install -r requirements.txt
+		) || echo ">>> heating_automation venv/pip setup failed - re-run by hand: cd ~/heating_automation && python3 -m venv venv && venv/bin/pip install -r requirements.txt. Continuing with the rest of this script either way."
+
+		if [ -d /mnt/HDD/files/usr/heating_automation ]; then
+			rsync -a --ignore-existing /mnt/HDD/files/usr/heating_automation/ /home/pi/heating_automation/
+			echo "Restored any gitignored files (e.g. config.yaml) from HDD backup."
+		fi
+		if [ ! -f /home/pi/heating_automation/config.yaml ]; then
+			echo ">>> config.yaml is still missing - copy config.yaml.example to"
+			echo ">>> config.yaml and fill in the AC units' real device credentials."
+		fi
+	else
+		echo ">>> Cloning heating_automation over SSH failed - most likely STEP 9"
+		echo ">>> didn't find/restore a working GitHub SSH key. Set one up (see"
+		echo ">>> STEP 9's instructions above) and re-run:"
+		echo ">>>   git clone git@github.com:IainBate/heating-automation.git /home/pi/heating_automation"
+		echo ">>> Continuing with the rest of this script either way, since"
+		echo ">>> nothing below depends on heating_automation."
+	fi
+else
+	echo "heating_automation already cloned, pulling latest instead..."
+	(cd /home/pi/heating_automation && git pull origin main)
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
+# STEP 14: minidlna config. media_dir points at /mnt/HDD/films only -
 # deliberate, this Pi doesn't DLNA-serve photos/other media.
 # ---------------------------------------------------------------------------
-echo "--- STEP 13: minidlna.conf ---"
+echo "--- STEP 14: minidlna.conf ---"
 sudo tee /etc/minidlna.conf > /dev/null <<'EOF'
 media_dir=V,/mnt/HDD/films
 db_dir=/var/cache/minidlna
@@ -423,7 +464,7 @@ echo "minidlna.conf written."
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 14: Samba [HDD] share. create/directory masks are deliberately tight
+# STEP 15: Samba [HDD] share. create/directory masks are deliberately tight
 # (0660/2770, setgid so new files/dirs inherit group pi) with force group =
 # pi, so access to /mnt/HDD is governed by real group membership (pi, which
 # minidlna was added to in STEP 5) rather than relying on files happening
@@ -431,7 +472,7 @@ echo ""
 # was both a security hole (world-writable over the network) and fragile
 # (minidlna's access only worked by accident).
 # ---------------------------------------------------------------------------
-echo "--- STEP 14: Samba [HDD] share ---"
+echo "--- STEP 15: Samba [HDD] share ---"
 SMB_MARKER="\[HDD\]"
 if ! sudo grep -q "$SMB_MARKER" /etc/samba/smb.conf; then
 	{
@@ -454,10 +495,10 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 15: normalize ownership/permissions on the media library to match
+# STEP 16: normalize ownership/permissions on the media library to match
 # the group-based access model above. Safe to re-run any time.
 # ---------------------------------------------------------------------------
-echo "--- STEP 15: fix_media_permissions ---"
+echo "--- STEP 16: fix_media_permissions ---"
 if mountpoint -q /mnt/HDD && [ -d /mnt/HDD/films ]; then
 	/home/pi/bin/fix_media_permissions || echo ">>> fix_media_permissions reported failure(s) (see above) - re-run it by hand once fixed. Continuing with the rest of this script either way."
 else
@@ -468,21 +509,21 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 16: log2ram tuning. The package default is SIZE=128M / no
+# STEP 17: log2ram tuning. The package default is SIZE=128M / no
 # LOG_DISK_SIZE tweak; this Pi runs SIZE=512M so logging bursts (e.g. a
 # noisy rsync run) don't fill the RAM-backed /var/log.
 # ---------------------------------------------------------------------------
-echo "--- STEP 16: log2ram ---"
+echo "--- STEP 17: log2ram ---"
 sudo sed -i 's/^SIZE=.*/SIZE=512M/' /etc/log2ram.conf
 sudo sed -i 's/^LOG_DISK_SIZE=.*/LOG_DISK_SIZE=256M/' /etc/log2ram.conf
 echo "log2ram.conf tuned (SIZE=512M)."
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 17: restart everything that got reconfigured above, so it's all live
+# STEP 18: restart everything that got reconfigured above, so it's all live
 # without needing a reboot.
 # ---------------------------------------------------------------------------
-echo "--- STEP 17: restart services ---"
+echo "--- STEP 18: restart services ---"
 sudo systemctl restart minidlna
 sudo systemctl restart smbd
 sudo systemctl restart log2ram || true
@@ -490,7 +531,7 @@ echo "Services restarted."
 echo ""
 
 # ---------------------------------------------------------------------------
-# STEP 18: summary / what's left to do by hand
+# STEP 19: summary / what's left to do by hand
 # ---------------------------------------------------------------------------
 echo "=================================================================="
 echo " fresh_install.sh: done. Manual follow-ups, if not already done:"
