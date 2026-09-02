@@ -39,6 +39,20 @@ MAILTO="iain.bate@gmail.com"
 0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/mg_saic_poller.py --quiet
 */10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/claude_usage_poller.py --quiet
 
+# SolaX Cloud historical PV data logger (see home_automation/config.yaml's
+# solaX_cloud_api comments) - feeds the evening SoC predictor's "analog day"
+# statistic and the solar forecast trainer/predictor's yesterday-vs-forecast
+# comparison. Incremental (only fetches dates not already in
+# data/solax_historical_data.json), so nightly is enough - real
+# token_id/master_wifisn/slave_wifisn credentials added to secrets.yaml
+# (2026-09-02) after months of running on the "NOT_USED_FOR_MODBUS"
+# placeholders, which is why data/solax_historical_data.json had gone stale
+# since 2026-07-09. No --quiet flag on this older script (unlike the newer
+# pollers above) and it logs via plain basicConfig to stderr, not a
+# logs/*.log file - redirected below so a routine successful run doesn't
+# trigger a nightly MAILTO email the way the newer --quiet scripts avoid.
+15 2 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/solax_cloud_data_logger.py >> logs/solax_cloud_data_logger.log 2>&1
+
 # Solar generation forecast (see home_automation/config.yaml's solar_forecast
 # comments) - config.yaml documented this cron line since the model was
 # first trained, but it was never actually added here, so the dashboard's
