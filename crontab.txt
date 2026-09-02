@@ -39,19 +39,20 @@ MAILTO="iain.bate@gmail.com"
 0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/mg_saic_poller.py --quiet
 */10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/claude_usage_poller.py --quiet
 
-# SolaX Cloud historical PV data logger (see home_automation/config.yaml's
+# SolaX Cloud PV data logger (see home_automation/config.yaml's
 # solaX_cloud_api comments) - feeds the evening SoC predictor's "analog day"
 # statistic and the solar forecast trainer/predictor's yesterday-vs-forecast
-# comparison. Incremental (only fetches dates not already in
-# data/solax_historical_data.json), so nightly is enough - real
-# token_id/master_wifisn/slave_wifisn credentials added to secrets.yaml
-# (2026-09-02) after months of running on the "NOT_USED_FOR_MODBUS"
-# placeholders, which is why data/solax_historical_data.json had gone stale
-# since 2026-07-09. No --quiet flag on this older script (unlike the newer
-# pollers above) and it logs via plain basicConfig to stderr, not a
-# logs/*.log file - redirected below so a routine successful run doesn't
-# trigger a nightly MAILTO email the way the newer --quiet scripts avoid.
-15 2 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/solax_cloud_data_logger.py >> logs/solax_cloud_data_logger.log 2>&1
+# comparison. Superseded 2026-09-02: the nightly solax_cloud_data_logger.py
+# job that used to be here needs a mobile-app session token nobody has ever
+# captured (see src/api_clients/solax_cloud_client.py's module docstring) -
+# it always failed "token invalid!"/"no auth!", which is the real reason
+# data/solax_historical_data.json had gone stale since 2026-07-09, not the
+# NOT_USED_FOR_MODBUS placeholder alone. The token an end-user actually gets
+# (the account's "Residential API (OLD)" page) only works against a
+# real-time-only endpoint, so this polls that every 5 minutes instead via
+# solax_realtime_logger.py - can't backfill days already past, only grows
+# the data going forward. Well within the API's documented 10/min limit.
+*/5 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/solax_realtime_logger.py --quiet
 
 # Solar generation forecast (see home_automation/config.yaml's solar_forecast
 # comments) - config.yaml documented this cron line since the model was
