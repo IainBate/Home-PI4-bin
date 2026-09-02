@@ -20,6 +20,19 @@ MAILTO="iain.bate@gmail.com"
 30 6 * * Mon sudo /home/pi/bin/home_backup >/tmp/home_backup_logfile 2>&1
 30 6 * * * /home/pi/bin/restart_minidlna
 
-# Home automation dashboard pollers (see home_automation/config.yaml comments for each)
+# Home automation dashboard pollers (see home_automation/config.yaml comments for each).
+# --quiet now also routes their WARNING+ logging to logs/*.log instead of
+# stderr (src/utils/logging_setup.py), so a transient failure here no longer
+# makes cron's MAILTO mail an email on the spot - daily_digest_check below
+# reports anything that actually recurred, once a day.
 0 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/mg_saic_poller.py --quiet
 */10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/claude_usage_poller.py --quiet
+
+# Daily digest of the above pollers' recurring failures (see
+# home_automation/config.yaml's daily_digest_check comments) - only emails
+# when something recurred, at most once a day.
+0 7 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/daily_digest_check.py --quiet
+
+# Weekly health check of the battery/hot-water daemons and dashboard service
+# (see home_automation/config.yaml's weekly_health_check comments).
+0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
