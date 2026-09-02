@@ -6,6 +6,8 @@
 LUCY_MODE=false
 BACKUP_PATH="/media/pi/Caravan"
 CHOWN_USER="minidlna"
+LOGFILE="/home/pi/logs/films_backup_logfile"
+SUCCESS_MARKER="/home/pi/logs/films_backup_success"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -13,6 +15,8 @@ while [[ "$#" -gt 0 ]]; do
             LUCY_MODE=true
             BACKUP_PATH="/media/pi/Lucy"
             CHOWN_USER="pi"
+            LOGFILE="/home/pi/logs/lucys_backup_logfile"
+            SUCCESS_MARKER="/home/pi/logs/lucys_backup_success"
             shift
             ;;
         *)
@@ -20,10 +24,32 @@ while [[ "$#" -gt 0 ]]; do
     esac
 done
 
+# Logs go under /home/pi (persistent) rather than /tmp, since /tmp is
+# tmpfs and gets wiped on every reboot (the Pi reboots weekly).
+# home_backup checks the mtime of SUCCESS_MARKER (not LOGFILE - that's
+# rewritten on every run, success or not) to alert if a backup is overdue;
+# keep these paths in sync with the check_stale() calls in home_backup.
+mkdir -p /home/pi/logs
+
+# exec'ing the redirect (rather than piping a `{ ...; } | tee`) keeps RC
+# and the script's own exit status tied to rsync, not to tee.
+exec > >(tee "$LOGFILE") 2>&1
+
+echo "=== films_backup run started: $(date '+%Y-%m-%d %H:%M:%S') (lucy_mode=$LUCY_MODE) ==="
 echo "Backup destination: $BACKUP_PATH/films/"
 sudo rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/ "$BACKUP_PATH/films/"
+RC=$?
 sudo chown -R $CHOWN_USER "$BACKUP_PATH"
 sudo chgrp -R $CHOWN_USER "$BACKUP_PATH"
+echo "=== films_backup run finished: $(date '+%Y-%m-%d %H:%M:%S') (rsync exit $RC) ==="
+
+# rsync exit 24 (source file vanished mid-transfer) is treated as success,
+# matching home_backup's existing convention.
+if [ "$RC" -eq 0 ] || [ "$RC" -eq 24 ]; then
+    touch "$SUCCESS_MARKER"
+fi
+
+exit "$RC"
 
 # find /mnt/HDD/ -mindepth 1 -maxdepth 1 -type d -not -path '*/\.*' | while read n; do
 # 	m=$(echo "$n"|sed 's/\/mnt\/HDD\///')

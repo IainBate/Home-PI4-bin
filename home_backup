@@ -46,6 +46,23 @@ run "unmount HDD_photos" udisksctl unmount -b /dev/disk/by-uuid/6829575a-6d8a-48
 run "unmount HDD_backup" udisksctl unmount -b /dev/disk/by-uuid/108877c8-994d-42b1-9be9-d93166281640
 sleep 10
 
+echo "Checking films_backup / lucys_backup freshness"
+# Checks the *success* marker (touched by films_backup only when rsync
+# exits 0 or 24), not the log file - the log is rewritten on every run
+# regardless of outcome, so it would never go stale even if the backup
+# fails every time. Keep these paths in sync with films_backup's
+# LOGFILE/SUCCESS_MARKER definitions.
+check_stale() {
+	local desc="$1" marker="$2" logfile="$3" max_days="$4"
+	if [ ! -f "$marker" ]; then
+		FAILURES+=("[$desc] no successful run recorded ($marker missing) - has it ever completed? (log: $logfile)")
+	elif [[ $(find "$marker" -mtime +$max_days -print) ]]; then
+		FAILURES+=("[$desc] last successful run was more than $max_days days ago - backup may be overdue (log: $logfile)")
+	fi
+}
+check_stale "films_backup" /home/pi/logs/films_backup_success /home/pi/logs/films_backup_logfile 31
+check_stale "lucys_backup" /home/pi/logs/lucys_backup_success /home/pi/logs/lucys_backup_logfile 31
+
 if [ ${#FAILURES[@]} -gt 0 ]; then
 	SUBJECT="[PI4] home_backup FAILED - $(date '+%Y-%m-%d %H:%M')"
 	{
