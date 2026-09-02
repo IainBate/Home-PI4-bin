@@ -30,8 +30,11 @@ run() {
 	return 0
 }
 
+# sudo on chgrp: a plain (non-root) chgrp fails on any file not already
+# owned by the invoking user (e.g. content that ended up owned by root),
+# which is exactly the kind of drift this script exists to fix.
 # 2770: setgid so new files/dirs inherit group pi; no "other" access.
-run "chgrp" chgrp -R "$MEDIA_GROUP" "$MEDIA_DIR"
+run "chgrp" sudo chgrp -R "$MEDIA_GROUP" "$MEDIA_DIR"
 run "chmod dirs" find "$MEDIA_DIR" -type d -exec chmod 2770 {} +
 run "chmod files" find "$MEDIA_DIR" -type f -exec chmod 660 {} +
 
