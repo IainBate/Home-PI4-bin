@@ -32,3 +32,11 @@ MAILTO="iain.bate@gmail.com"
 # home_automation/config.yaml's daily_digest_check comments) - only emails
 # when something recurred, at most once a day.
 0 7 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/daily_digest_check.py --quiet
+
+# Weekly health check (see home_automation/config.yaml's weekly_health_check
+# comments) - the priority path: scans battery_mode_daemon.py/
+# hotwater_mode_daemon.py's logs for ERROR/CRITICAL and checks the
+# home_automation*.service units are active. Only emails when something is
+# actually wrong. This was documented in the README as already running but
+# had never actually been added here (2026-09-02) - added now.
+0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
