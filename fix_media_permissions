@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Normalizes ownership/permissions under /mnt/HDD/films so that access is
+# governed by group membership (pi, which minidlna is a member of) rather
+# than relying on files happening to stay world-readable. Safe to re-run.
+
+MEDIA_DIR="/mnt/HDD/films"
+MEDIA_GROUP="pi"
+
+if ! mountpoint -q /mnt/HDD; then
+	echo "ERROR: /mnt/HDD is not mounted, aborting" >&2
+	exit 1
+fi
+
+if [ ! -d "$MEDIA_DIR" ]; then
+	echo "ERROR: $MEDIA_DIR does not exist, aborting" >&2
+	exit 1
+fi
+
+FAILURES=0
+
+run() {
+	local desc="$1"; shift
+	"$@"
+	local rc=$?
+	if [ $rc -ne 0 ]; then
+		echo "FAILED [$desc] exit $rc: $*" >&2
+		FAILURES=$((FAILURES+1))
+	fi
+	return 0
+}
+
+# 2770: setgid so new files/dirs inherit group pi; no "other" access.
+run "chgrp" chgrp -R "$MEDIA_GROUP" "$MEDIA_DIR"
+run "chmod dirs" find "$MEDIA_DIR" -type d -exec chmod 2770 {} +
+run "chmod files" find "$MEDIA_DIR" -type f -exec chmod 660 {} +
+
+if [ $FAILURES -gt 0 ]; then
+	echo "fix_media_permissions: $FAILURES step(s) failed"
+	exit 1
+fi
+
+echo "fix_media_permissions: OK ($(find "$MEDIA_DIR" -type f | wc -l) files, $(find "$MEDIA_DIR" -type d | wc -l) dirs)"
