@@ -363,8 +363,39 @@ echo ""
 # systemd services, restoring runtime-only files) - rather than duplicate
 # that logic here, this just clones it and hands off to setup_pi.sh. It
 # will ask an interactive y/N confirmation before doing anything.
+#
+# Python version note: home_automation's requirements.txt documents Python
+# 3.11+ as the hard minimum (it uses `datetime.UTC` and `asyncio.timeout()`,
+# both added in 3.11) and states production has only ever been validated
+# against 3.13.5 specifically. That version isn't pinned by any apt package
+# here - it just comes from whichever Debian/Raspberry Pi OS release you
+# flashed (STEP 0's prerequisites say trixie, which is 3.13.x). The one
+# dependency version that's genuinely safety-critical - pymodbus==3.11.4,
+# exact-pinned because pymodbus's own API breaks across ITS minor releases -
+# is handled correctly regardless of interpreter version, via `pip install
+# -r requirements.txt` inside setup_pi.sh. This check just warns if the
+# system Python looks like it could be a problem before that runs.
 # ---------------------------------------------------------------------------
 echo "--- STEP 12: home_automation ---"
+PYVER=$(python3 -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])')
+PYMAJOR=$(python3 -c 'import sys; print(sys.version_info[0])')
+PYMINOR=$(python3 -c 'import sys; print(sys.version_info[1])')
+echo "System python3 version: $PYVER"
+if [ "$PYMAJOR" -lt 3 ] || { [ "$PYMAJOR" -eq 3 ] && [ "$PYMINOR" -lt 11 ]; }; then
+	echo ">>> WARNING: home_automation requires Python 3.11+ and this system"
+	echo ">>> has $PYVER. The venv setup just below will likely still create"
+	echo ">>> fine, but the daemon will fail at runtime (datetime.UTC and"
+	echo ">>> asyncio.timeout() aren't available before 3.11). You're"
+	echo ">>> probably on an older/different OS image than intended - check"
+	echo ">>> STEP 0's prerequisites (Raspberry Pi OS, Debian 13/trixie)."
+elif [ "$PYVER" != "3.13.5" ]; then
+	echo ">>> NOTE: home_automation was only ever validated in production"
+	echo ">>> against Python 3.13.5 specifically; this system has $PYVER."
+	echo ">>> 3.11+ should be fine - the version-sensitive dependency"
+	echo ">>> (pymodbus==3.11.4) is pinned by pip, not by the interpreter -"
+	echo ">>> but if anything behaves unexpectedly after setup, this is the"
+	echo ">>> first thing worth comparing against."
+fi
 if [ ! -d /home/pi/home_automation/.git ]; then
 	if git clone git@github.com:IainBate/home-automation.git /home/pi/home_automation; then
 		echo ""
