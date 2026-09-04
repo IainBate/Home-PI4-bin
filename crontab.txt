@@ -83,4 +83,18 @@ MAILTO="iain.bate@gmail.com"
 # actually wrong. This was documented in the README as already running but
 # had never actually been added here (2026-09-02) - added now.
 0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
+
+# Healthchecks.io heartbeat (see home_automation/config.yaml's
+# healthchecks_io comments) - a dead-man's-switch, distinct from the two
+# checks above: those email FROM the Pi when they find a problem, so a Pi
+# that's powered off or off the network sends no email at all. This pings
+# an external Healthchecks.io check instead, which alerts when a ping is
+# MISSING rather than when something is found wrong - added 2026-09-04
+# after an unhealthy dashboard reading went unnoticed overnight. Uses its
+# own check (a different ping_url in secrets.yaml), separate from
+# home_backup's existing one above, so one dead job can't silence alerts
+# for the other. No-ops quietly until healthchecks_io.enabled/ping_url are
+# set for real.
+*/10 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/healthchecks_heartbeat.py --quiet
+
 0 3 * * * cd /home/pi/home_automation && bash scripts/encrypt_secrets.sh --quiet
