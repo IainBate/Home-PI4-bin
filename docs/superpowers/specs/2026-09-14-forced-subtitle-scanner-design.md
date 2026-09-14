@@ -92,12 +92,28 @@ don't. This adds a script to:
   <file>` (no new ffprobe logic) to get `FORCED=0|1`, `COVERAGE=<pct>`,
   `EXTERNAL_SRT=0|1`.
 - Identifies the film: normalizes filename + parent folder (strips
-  extension, resolution/codec/year tags) and matches against
-  `forced_subs_known_films.yaml` titles/aliases (case-insensitive
-  substring/word-overlap — no fuzzy-matching library, keeps this
-  dependency-free like the rest of the repo). Edition picked by comparing
-  the file's actual ffprobe duration against the matched entry's
-  `editions[].runtime_minutes`.
+  extension, resolution/codec tags — **year is extracted separately, not
+  discarded**: a 4-digit `19xx`/`20xx` token, typically in parentheses or
+  after a dash, e.g. `Moana - 2026` or `Moana (2026)`) and matches the
+  remaining title text against `forced_subs_known_films.yaml`
+  titles/aliases (case-insensitive substring/word-overlap — no
+  fuzzy-matching library, keeps this dependency-free like the rest of the
+  repo).
+  - If exactly one curated entry matches the title, use it (year in the
+    filename, if present, is a sanity check only — most of the library
+    won't have a year tag at all, e.g. `Star Wars/Phantom Menace.mp4`).
+  - If **more than one** curated entry shares that title (e.g. Moana
+    (2016) and Moana (2026) are two separate entries, same title,
+    different `year`/`imdb_id`) — this is the Moana case — the filename's
+    extracted year is *required* to disambiguate. Matches the one entry
+    whose `year` agrees. If the filename has no year token, or the year
+    doesn't match any candidate, this is **not guessed**: bucketed as
+    `NEEDS_FORCED_UNKNOWN` with reason `ambiguous_title_multiple_years`,
+    so it surfaces for manual review rather than risking the wrong film's
+    subtitle being muxed in.
+  - Edition (for a single matched film) picked by comparing the file's
+    actual ffprobe duration against the matched entry's
+    `editions[].runtime_minutes`.
 - Buckets each file:
   - `HAS_FORCED` — `FORCED=1` with `COVERAGE>=15` (matches convert_video's
     existing threshold for "this is real forced-sub content, not a
