@@ -367,4 +367,25 @@ assert_file_exists "stray file still gets organized into Season 3 on a no-rename
 
 rm -rf "$NRTREE" "$NRSTUB_DIR" "$NRDEST_DIR"
 
+echo "== main: organizes into Family/Modern (not a literal 'Modern' folder) for that show name =="
+
+MRTREE="$(mktemp -d)"
+mkdir -p "$MRTREE/e1"
+touch "$MRTREE/e1/Show.S01E01.mkv"
+
+MRSTUB_DIR="$(mktemp -d)"
+MRDEST_DIR="$(mktemp -d)"
+: > "$MRSTUB_DIR/log"
+printf '%s\tCOVERAGE=0 FORCED=0 EXTERNAL_SRT=0\n' "$MRTREE/e1/S01E01.mkv" > "$MRSTUB_DIR/profiles"
+: > "$MRSTUB_DIR/faillist"
+
+CONVERT_VIDEO="$(make_stub_convert_video "$MRSTUB_DIR" "$MRSTUB_DIR/profiles" "$MRSTUB_DIR/faillist" "$MRDEST_DIR")"
+FILMS_BASE_DIR="$MRDEST_DIR"
+
+main "$MRTREE" "Modern" </dev/null >/dev/null 2>&1
+
+assert_file_exists "organized under Family/Modern/Season 1, matching convert_video's own genre redirect" "$MRDEST_DIR/Family/Modern/Season 1/S01E01.mp4"
+
+rm -rf "$MRTREE" "$MRSTUB_DIR" "$MRDEST_DIR"
+
 test_summary_and_exit
