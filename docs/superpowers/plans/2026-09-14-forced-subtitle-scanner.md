@@ -1376,12 +1376,10 @@ assert_file_exists "scan log was written" "$SCAN_LOG"
 echo "== incremental: an unchanged HAS_FORCED file is replayed from cache, not re-probed =="
 export SCAN_CACHE="$WORK/scan_cache"
 "$FORCED_SUBS" scan >/dev/null  # populate the cache
-mv "$REPO_ROOT/convert_video" "$REPO_ROOT/convert_video.disabled"
-restore_convert_video() { mv "$REPO_ROOT/convert_video.disabled" "$REPO_ROOT/convert_video" 2>/dev/null || true; }
-trap restore_convert_video EXIT
-out2=$("$FORCED_SUBS" scan 2>&1)
-restore_convert_video
-trap - EXIT
+# Point CONVERT_VIDEO at a nonexistent path for this run only: if the cached
+# HAS_FORCED file still reports correctly, it proves scan didn't need to
+# call convert_video for it at all (the file genuinely can't be re-probed).
+out2=$(FORCED_SUBS_CONVERT_VIDEO="$WORK/no-such-convert_video" "$FORCED_SUBS" scan 2>&1)
 assert_contains "HAS_FORCED file still reported correctly with convert_video unavailable" "$out2" "$(printf 'HAS_FORCED\t%s/films/Star Wars/has_forced.mkv' "$WORK")"
 
 test_summary_and_exit
