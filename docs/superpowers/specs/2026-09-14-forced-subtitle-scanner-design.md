@@ -186,15 +186,15 @@ that only has new/uncached files left to do.
 - Per candidate:
   1. If `EXTERNAL_SRT=1` already (a sidecar `.srt` sits next to the file),
      skip searching entirely and mux that file directly.
-  2. Otherwise, search OpenSubtitles: **primary** strategy is
-     moviehash-based lookup (the standard mechanism subtitle tools use for
-     exact-release matching — matches subtitles uploaded against files
+  2. Otherwise, search OpenSubtitles: **primary** strategy is the same
+     moviehash-based lookup `identify` already used (reuses that hash
+     rather than recomputing it — matches subtitles uploaded against files
      with the identical hash, so it's edition-exact when a match exists).
-     **Fallback**: IMDb ID + `languages=en` + forced/foreign-parts-only
-     filter, sanity-checked against the matched edition's expected
-     runtime. If still ambiguous, log to the unavailable cache with
-     reason `ambiguous` rather than guessing — a mistimed subtitle is
-     worse than no subtitle.
+     **Fallback**: the file's cached `imdb_id` + `languages=en` +
+     forced/foreign-parts-only filter, sanity-checked against the matched
+     edition's expected runtime. If still ambiguous, log to the
+     unavailable cache with reason `ambiguous` rather than guessing — a
+     mistimed subtitle is worse than no subtitle.
   3. Download the matched SRT (requires the JWT from `/login`).
   4. Remux via ffmpeg to a temp file: `-map 0:v -map 0:a -map 1:s -c:v
      copy -c:a copy`, subtitle codec `mov_text` for `.mp4`/`.m4v`
