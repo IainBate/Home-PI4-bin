@@ -1163,7 +1163,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LIBDIR="${FORCED_SUBS_LIBDIR:-$REPO_ROOT/lib}"
-CONVERT_VIDEO="$REPO_ROOT/convert_video"
+CONVERT_VIDEO="${FORCED_SUBS_CONVERT_VIDEO:-$REPO_ROOT/convert_video}"
 KNOWN_FILMS_YAML="${FORCED_SUBS_KNOWN_FILMS:-$REPO_ROOT/forced_subs_known_films.yaml}"
 FILMS_ROOT="${FORCED_SUBS_FILMS_ROOT:-/mnt/HDD/films}"
 FID_CACHE="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
