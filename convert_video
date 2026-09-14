@@ -124,8 +124,15 @@ analyze_subtitles() {
                 STREAM_IDX=$(echo "$sub_stream" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
 
                 if [[ -n "$STREAM_IDX" ]]; then
-                    # Get subtitle packet times for this stream
-                    PACKET_DATA=$(ffprobe -v error -select_streams s:$STREAM_IDX -show_entries packet=pts_time,duration -of csv=p=0 "$filename" 2>/dev/null)
+                    # Get subtitle packet times for this stream. STREAM_IDX is
+                    # the absolute container stream index (from "Stream #0:N"),
+                    # so it must be passed to -select_streams as a bare index,
+                    # not "s:N" (which means the Nth stream *of type subtitle*
+                    # and is usually a different, often nonexistent, stream).
+                    # duration_time (seconds) is used rather than the raw
+                    # duration field (timebase ticks), which isn't seconds and
+                    # would wildly overstate coverage if summed as such.
+                    PACKET_DATA=$(ffprobe -v error -select_streams $STREAM_IDX -show_entries packet=pts_time,duration_time -of csv=p=0 "$filename" 2>/dev/null)
 
                     while IFS=',' read -r pts duration; do
                         if [[ -n "$duration" && "$duration" != "N/A" ]]; then
