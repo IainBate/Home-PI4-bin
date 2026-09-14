@@ -32,16 +32,35 @@ don't. This adds a script to:
     bucketing) so `apply` always re-derives its candidate set fresh from
     `scan`'s logic rather than trusting stale state.
 - **`forced_subs_known_films.yaml`** — curated list, committed to git.
-  Schema per entry:
+  Schema per entry — note `year` is required and identifies a distinct
+  *film*, not an edition: two films can share a title (e.g. Moana (2016)
+  animated vs. Moana (2026) live-action remake are two different `imdb_id`s
+  and two separate entries), whereas `editions` is for cuts of the *same*
+  film (theatrical vs. director's cut share one `imdb_id`/`year`).
   ```yaml
   - title: "Star Wars: Episode I - The Phantom Menace"
     aliases: ["Phantom Menace", "Episode I"]
+    year: 1999
     imdb_id: "tt0120915"
     editions:
       - name: theatrical
         runtime_minutes: 133
       - name: 2011_bluray
         runtime_minutes: 136
+  - title: "Moana"
+    aliases: []
+    year: 2016
+    imdb_id: "tt3521164"
+    editions:
+      - name: theatrical
+        runtime_minutes: 107
+  - title: "Moana"
+    aliases: []
+    year: 2026
+    imdb_id: "TBD"
+    editions:
+      - name: theatrical
+        runtime_minutes: TBD
   ```
   Seeded initially with franchises I'm confident about (Star Wars saga,
   LOTR trilogy, and similar — to be filled in during implementation).
