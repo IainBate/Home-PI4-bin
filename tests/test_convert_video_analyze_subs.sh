@@ -90,4 +90,28 @@ echo "== analyze mode exits 0 =="
 run_analyze "$WORK/no_subs/no_subs.mkv" >/dev/null
 assert_eq "exit code 0" "0" "$?"
 
+echo "== --no-subs skips subtitle analysis entirely, even when subtitles are present =="
+
+NSDIR="$(mktemp -d)"
+ffmpeg -y -f lavfi -i testsrc=duration=3:size=160x90:rate=5 -f lavfi -i sine=duration=3 \
+    -pix_fmt yuv420p "$NSDIR/base.mp4" -hide_banner -loglevel error
+cat > "$NSDIR/subs.srt" <<'EOF'
+1
+00:00:00,000 --> 00:00:02,000
+Hola
+EOF
+ffmpeg -y -i "$NSDIR/base.mp4" -i "$NSDIR/subs.srt" -map 0:v -map 0:a -map 1:s -c:v libx264 -c:a aac -c:s srt \
+    -metadata:s:s:0 language=eng -disposition:s:0 forced "$NSDIR/Movie With Subs.mkv" -hide_banner -loglevel error
+
+out=$(cd "$NSDIR" && "$CONVERT_VIDEO" -n --no-subs "Movie With Subs.mkv" "TestGenre" </dev/null 2>&1)
+
+assert_eq "no-subs: never runs the subtitle analysis probe" "no" "$([[ "$out" == *"Analyzing subtitles"* ]] && echo yes || echo no)"
+
+tmp_output=$(find "$NSDIR" -maxdepth 1 -name "tmp_*.mp4" | head -1)
+assert_eq "no-subs: still produces an encoded output despite skipping analysis" "no" "$([[ -z "$tmp_output" ]] && echo yes || echo no)"
+sub_stream_count=$(ffprobe -v error -select_streams s -show_entries stream=index -of csv=p=0 "$tmp_output" 2>/dev/null | wc -l | tr -d ' ')
+assert_eq "no-subs: output has no subtitle stream (source had one, but -no-subs forces -sn)" "0" "$sub_stream_count"
+
+rm -rf "$NSDIR"
+
 test_summary_and_exit
