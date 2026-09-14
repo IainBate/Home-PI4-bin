@@ -167,6 +167,25 @@ that only has new/uncached files left to do.
   `/home/pi/logs/forced_subs_scan_logfile`, one line per file:
   `<bucket>\t<path>\t<imdb_id>\t<matched_title>\t<matched_edition>\t<coverage>\t<external_srt>`.
 
+### Incremental scanning
+
+The library is scanned repeatedly (weekly `identify`, daily `apply`, and
+`scan`/`report` run by hand) indefinitely, potentially over years, so
+`scan` must not pay the cost of re-probing every file on every run forever.
+A second cache, `forced_subs_scan_cache` (path, file size, mtime, and the
+full bucketing result), lets `scan` skip re-running `convert_video
+--analyze-subs` (and the identity/known-films lookups) for a file when
+**both** are true: the file's size+mtime are unchanged since the cache row
+was written, **and** that row's bucket was `HAS_FORCED` — a settled,
+unlikely-to-regress state. Anything still `NEEDS_FORCED_*` is always
+re-checked (cheap relative to the whole library, and necessary: its state
+can change between runs, e.g. once `apply` fixes it). Because a successful
+`apply` remux changes the file's mtime, a file that was `NEEDS_FORCED_KNOWN`
+yesterday and got fixed overnight is automatically re-evaluated (cache
+signature no longer matches) and picked up as `HAS_FORCED` on the next
+`scan` — no explicit invalidation logic needed. Replacing a file on disk
+(new rip, re-encode) is likewise caught by the same size/mtime check.
+
 ## Phase 2: `apply`
 
 - Re-runs `scan`'s bucketing logic to get the current `NEEDS_FORCED_KNOWN`
