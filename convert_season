@@ -234,83 +234,106 @@ main() {
         printf '  %s\n' "${skipped_reported[@]}"
     fi
 
+    # Skip anything already converted by an earlier run over this (probably
+    # grown) source tree, rather than silently re-encoding and overwriting
+    # already-organized output.
+    local already_done=()
+    local still_pending=()
+    for entry in "${renamed[@]}"; do
+        tag="${entry%%$'\t'*}"
+        if episode_already_converted "$show_name" "$tag"; then
+            already_done+=("$tag")
+        else
+            still_pending+=("$entry")
+        fi
+    done
+    renamed=("${still_pending[@]}")
+
+    if [[ ${#already_done[@]} -gt 0 ]]; then
+        echo "Skipped (already converted by an earlier run):"
+        printf '  %s\n' "${already_done[@]}"
+    fi
+
     if [[ ${#renamed[@]} -eq 0 ]]; then
         echo "No files to convert."
-        return 0
-    fi
+    else
+        # Classify every renamed file's subtitle profile before converting
+        # anything, so an anomaly is caught before paying for an encode
+        # rather than after.
+        local classified=() bucket_list=() bucket
+        for entry in "${renamed[@]}"; do
+            new_path="${entry#*$'\t'}"
+            bucket=$(classify_profile "$new_path")
+            classified+=("$entry"$'\t'"$bucket")
+            bucket_list+=("$bucket")
+        done
 
-    # Classify every renamed file's subtitle profile before converting
-    # anything, so an anomaly is caught before paying for an encode rather
-    # than after.
-    local classified=() bucket_list=() bucket
-    for entry in "${renamed[@]}"; do
-        new_path="${entry#*$'\t'}"
-        bucket=$(classify_profile "$new_path")
-        classified+=("$entry"$'\t'"$bucket")
-        bucket_list+=("$bucket")
-    done
+        local majority
+        majority=$(printf '%s\n' "${bucket_list[@]}" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+        echo "Season subtitle profile: baseline = $majority"
 
-    local majority
-    majority=$(printf '%s\n' "${bucket_list[@]}" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
-    echo "Season subtitle profile: baseline = $majority"
+        # For an ambiguous baseline (would otherwise make convert_video
+        # prompt per file), ask once and apply the same answer to every
+        # file sharing that bucket, by piping it to convert_video's own
+        # interactive prompt.
+        local piped_answer="" ans
+        case "$majority" in
+            LOW)
+                read -r -p "Low-coverage forced English subtitles detected across this season - include them? [Y/n] " ans
+                [[ "$ans" =~ ^[Nn] ]] && piped_answer="n" || piped_answer="y"
+                ;;
+            EXTERNAL_SRT)
+                read -r -p "External subtitle file(s) found across this season - include them? [y/N] " ans
+                [[ "$ans" =~ ^[Yy] ]] && piped_answer="y" || piped_answer="n"
+                ;;
+        esac
 
-    # For an ambiguous baseline (would otherwise make convert_video prompt
-    # per file), ask once and apply the same answer to every file sharing
-    # that bucket, by piping it to convert_video's own interactive prompt.
-    local piped_answer="" ans
-    case "$majority" in
-        LOW)
-            read -r -p "Low-coverage forced English subtitles detected across this season - include them? [Y/n] " ans
-            [[ "$ans" =~ ^[Nn] ]] && piped_answer="n" || piped_answer="y"
-            ;;
-        EXTERNAL_SRT)
-            read -r -p "External subtitle file(s) found across this season - include them? [y/N] " ans
-            [[ "$ans" =~ ^[Yy] ]] && piped_answer="y" || piped_answer="n"
-            ;;
-    esac
-
-    local to_convert=() anomalies=() rest
-    for entry in "${classified[@]}"; do
-        tag="${entry%%$'\t'*}"
-        rest="${entry#*$'\t'}"
-        new_path="${rest%%$'\t'*}"
-        bucket="${rest#*$'\t'}"
-        if [[ "$bucket" == "$majority" ]]; then
-            to_convert+=("$tag"$'\t'"$new_path")
-        else
-            anomalies+=("$tag: $new_path (profile: $bucket, season baseline: $majority)")
-        fi
-    done
-
-    if [[ ${#anomalies[@]} -gt 0 ]]; then
-        echo "Anomalies (subtitle profile differs from the season baseline - left unconverted for manual review):"
-        printf '  %s\n' "${anomalies[@]}"
-    fi
-
-    local converted=() failed=()
-    for entry in "${to_convert[@]}"; do
-        tag="${entry%%$'\t'*}"
-        new_path="${entry#*$'\t'}"
-        if [[ -n "$piped_answer" ]]; then
-            if printf '%s\n' "$piped_answer" | "$CONVERT_VIDEO" "$new_path" "$show_name"; then
-                converted+=("$tag")
+        local to_convert=() anomalies=() rest
+        for entry in "${classified[@]}"; do
+            tag="${entry%%$'\t'*}"
+            rest="${entry#*$'\t'}"
+            new_path="${rest%%$'\t'*}"
+            bucket="${rest#*$'\t'}"
+            if [[ "$bucket" == "$majority" ]]; then
+                to_convert+=("$tag"$'\t'"$new_path")
             else
-                failed+=("$tag: $new_path")
+                anomalies+=("$tag: $new_path (profile: $bucket, season baseline: $majority)")
             fi
-        else
-            if "$CONVERT_VIDEO" "$new_path" "$show_name" </dev/null; then
-                converted+=("$tag")
-            else
-                failed+=("$tag: $new_path")
-            fi
-        fi
-    done
+        done
 
-    echo "Converted: ${#converted[@]}, Failed: ${#failed[@]}"
-    if [[ ${#failed[@]} -gt 0 ]]; then
-        printf '  FAILED: %s\n' "${failed[@]}"
+        if [[ ${#anomalies[@]} -gt 0 ]]; then
+            echo "Anomalies (subtitle profile differs from the season baseline - left unconverted for manual review):"
+            printf '  %s\n' "${anomalies[@]}"
+        fi
+
+        local converted=() failed=()
+        for entry in "${to_convert[@]}"; do
+            tag="${entry%%$'\t'*}"
+            new_path="${entry#*$'\t'}"
+            if [[ -n "$piped_answer" ]]; then
+                if printf '%s\n' "$piped_answer" | "$CONVERT_VIDEO" "$new_path" "$show_name"; then
+                    converted+=("$tag")
+                else
+                    failed+=("$tag: $new_path")
+                fi
+            else
+                if "$CONVERT_VIDEO" "$new_path" "$show_name" </dev/null; then
+                    converted+=("$tag")
+                else
+                    failed+=("$tag: $new_path")
+                fi
+            fi
+        done
+
+        echo "Converted: ${#converted[@]}, Failed: ${#failed[@]}"
+        if [[ ${#failed[@]} -gt 0 ]]; then
+            printf '  FAILED: %s\n' "${failed[@]}"
+        fi
     fi
 
+    # Always runs, even on a no-op run: catches stray already-converted
+    # episodes sitting at the destination top level independent of
+    # whatever this run itself did or didn't rename/convert.
     organize_into_seasons "$FILMS_BASE_DIR/$show_name"
     echo "Done."
 }
