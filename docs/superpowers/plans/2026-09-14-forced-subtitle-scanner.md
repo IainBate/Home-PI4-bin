@@ -1987,11 +1987,16 @@ git commit -m "Wire forced_subs into crontab.txt and fresh_install.sh"
 
 - [ ] **Step 4: First real run (manual, on the Pi — not part of this repo's automated tests)**
 
+Run `identify` detached (`nohup` + backgrounded), not as a plain foreground SSH command — an SSH disconnect or the Pi's weekly reboot would otherwise kill an in-progress first pass with no way to reattach. It's safe either way (Step 1's `@reboot` entry resumes it after a reboot regardless), but detaching means a dropped SSH session alone doesn't cost the progress:
+
 ```bash
 ssh pi@100.102.156.19
 cd ~/Home_PI4_bin && git pull
-./forced_subs identify          # full library, takes a while the first time
-./forced_subs report --verbose  # see what needs manual attention right now
+nohup ./forced_subs identify >>/home/pi/logs/forced_subs_identify_logfile 2>&1 &
+disown
+# check back periodically with: pgrep -f 'forced_subs identify' (empty = finished or not running)
+#                            or: tail -f /home/pi/logs/forced_subs_identify_logfile
+./forced_subs report --verbose  # once identify has finished - see what needs manual attention right now
 ```
 
 Review anything under "you'll need to sort these out yourself" with reason `ambiguous_title_multiple_years` or `no_match` — resolve genuine curated-list gaps with `--set`, or add missing titles/aliases/the 2026 Moana entry (once its IMDb ID/runtime are known) to `forced_subs_known_films.yaml`.
