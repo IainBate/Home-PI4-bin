@@ -100,47 +100,72 @@ don't. This adds a script to:
   before this work merges, or the plaintext credential file risks being
   committed.
 
+## Phase 0: `identify`
+
+Walks `/mnt/HDD/films`, pruning `Our Family`, and for each video file not
+already in `forced_subs_file_ids` (or all files, with `--rehash`),
+resolves a unique reference — an IMDb ID — and caches it:
+
+1. **Primary: hash lookup.** Computes the file's OpenSubtitles moviehash +
+   size and queries OpenSubtitles' hash-based search. When it returns a
+   match, the result carries the *actual* film's metadata (imdb_id, title,
+   year) for that exact release — independent of filename, and this is
+   what resolves same-title-different-film cases (e.g. Moana (2016) vs.
+   Moana (2026)) reliably, since the hash is specific to one exact file.
+   Recorded with `confidence=hash`.
+2. **Fallback: filename/folder matching.** If no hash match (nobody's
+   uploaded subs against that exact release), normalizes filename + parent
+   folder (strips extension, resolution/codec tags — **year is extracted
+   separately, not discarded**: a 4-digit `19xx`/`20xx` token, typically in
+   parentheses or after a dash) and matches the remaining title text
+   against `forced_subs_known_films.yaml` titles/aliases. If exactly one
+   curated entry matches the title, use it (`confidence=filename`); if
+   more than one curated entry shares that title, the filename's extracted
+   year is required to disambiguate, and if it's absent or doesn't match
+   any candidate, **this is not guessed** — recorded as
+   `confidence=unresolved`, reason `ambiguous_title_multiple_years`.
+   Anything with no title match at all is also `unresolved`, reason
+   `no_match`.
+3. **Manual override.** `forced_subs identify --set <path> <imdb_id>` lets
+   you resolve any `unresolved` (or wrong) entry by hand — e.g. after
+   eyeballing which Moana is which yourself. Sticky: never overwritten by
+   a later plain `identify` run.
+
+This uses OpenSubtitles *search* calls only (no downloads), which share a
+much more generous quota than `apply`'s download budget — see "Subtitle
+source" below — so `identify` doesn't need day-by-day rate limiting the
+way `apply` does; it can process the whole backlog in one run, and after
+that only has new/uncached files left to do.
+
 ## Phase 1: `scan`
 
-- Walks `/mnt/HDD/films`, pruning the `Our Family` directory entirely
-  (home videos, not in scope).
+- Walks `/mnt/HDD/films`, pruning `Our Family`, same as `identify`.
 - For each video file, runs the **existing** `convert_video --analyze-subs
   <file>` (no new ffprobe logic) to get `FORCED=0|1`, `COVERAGE=<pct>`,
   `EXTERNAL_SRT=0|1`.
-- Identifies the film: normalizes filename + parent folder (strips
-  extension, resolution/codec tags — **year is extracted separately, not
-  discarded**: a 4-digit `19xx`/`20xx` token, typically in parentheses or
-  after a dash, e.g. `Moana - 2026` or `Moana (2026)`) and matches the
-  remaining title text against `forced_subs_known_films.yaml`
-  titles/aliases (case-insensitive substring/word-overlap — no
-  fuzzy-matching library, keeps this dependency-free like the rest of the
-  repo).
-  - If exactly one curated entry matches the title, use it (year in the
-    filename, if present, is a sanity check only — most of the library
-    won't have a year tag at all, e.g. `Star Wars/Phantom Menace.mp4`).
-  - If **more than one** curated entry shares that title (e.g. Moana
-    (2016) and Moana (2026) are two separate entries, same title,
-    different `year`/`imdb_id`) — this is the Moana case — the filename's
-    extracted year is *required* to disambiguate. Matches the one entry
-    whose `year` agrees. If the filename has no year token, or the year
-    doesn't match any candidate, this is **not guessed**: bucketed as
-    `NEEDS_FORCED_UNKNOWN` with reason `ambiguous_title_multiple_years`,
-    so it surfaces for manual review rather than risking the wrong film's
-    subtitle being muxed in.
-  - Edition (for a single matched film) picked by comparing the file's
-    actual ffprobe duration against the matched entry's
-    `editions[].runtime_minutes`.
+- Looks up the file's `imdb_id` in `forced_subs_file_ids` (running
+  `identify`'s per-file logic inline if the cache has no entry yet for
+  it). If still `unresolved`, buckets straight to `NEEDS_FORCED_UNKNOWN`
+  (reason from the identity cache, e.g. `ambiguous_title_multiple_years`
+  or `no_match`) — no further matching logic needed here, since
+  disambiguation is entirely `identify`'s job now.
+- Otherwise, looks the `imdb_id` up directly in
+  `forced_subs_known_films.yaml` (an exact key lookup, not fuzzy matching
+  — ambiguity was already resolved in Phase 0). Edition (if the entry has
+  more than one) picked by comparing the file's actual ffprobe duration
+  against `editions[].runtime_minutes`.
 - Buckets each file:
   - `HAS_FORCED` — `FORCED=1` with `COVERAGE>=15` (matches convert_video's
     existing threshold for "this is real forced-sub content, not a
     mislabeled full track"), or `EXTERNAL_SRT=1`.
-  - `NEEDS_FORCED_KNOWN` — no forced subs, film matched in the curated
-    list. This is `apply`'s candidate set.
-  - `NEEDS_FORCED_UNKNOWN` — no forced subs, film not on the curated list.
-    Reported only; never touched by `apply`.
+  - `NEEDS_FORCED_KNOWN` — no forced subs, `imdb_id` matched in the
+    curated list. This is `apply`'s candidate set.
+  - `NEEDS_FORCED_UNKNOWN` — no forced subs, and either the film is
+    unidentified or its `imdb_id` isn't on the curated list yet. Reported
+    only; never touched by `apply`.
 - Output: printed to stdout and appended to
   `/home/pi/logs/forced_subs_scan_logfile`, one line per file:
-  `<bucket>\t<path>\t<matched_title>\t<matched_edition>\t<coverage>\t<external_srt>`.
+  `<bucket>\t<path>\t<imdb_id>\t<matched_title>\t<matched_edition>\t<coverage>\t<external_srt>`.
 
 ## Phase 2: `apply`
 
