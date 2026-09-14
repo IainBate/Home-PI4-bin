@@ -187,6 +187,10 @@ while [[ "$#" -gt 0 ]]; do
             FORCED_SUBS=true
             shift
             ;;
+        --no-subs)
+            NO_SUBS=true
+            shift
+            ;;
         --analyze-subs)
             ANALYZE_MODE=true
             ANALYZE_FILE="$2"
