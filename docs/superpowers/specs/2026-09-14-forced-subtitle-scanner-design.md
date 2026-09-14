@@ -256,6 +256,12 @@ three clearly separated sections:
 This is the output you'd actually run and read after a batch of daily
 `apply` runs has had time to work through the backlog.
 
+`report` writes this same output to a file at the **top level of the films
+tree itself** — `/mnt/HDD/films/_FORCED_SUBTITLES_REPORT.txt` — in addition
+to stdout, so it's visible just by browsing the share (a leading `_` sorts
+it above the film folders in most file browsers), not only from a shell on
+the Pi. Overwritten on each `report` run, not appended.
+
 ## Subtitle source
 
 OpenSubtitles.com REST API only. It's the sole major subtitle site with an
