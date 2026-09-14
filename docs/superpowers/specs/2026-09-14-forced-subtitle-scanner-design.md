@@ -28,9 +28,11 @@ don't. This adds a script to:
 - **`forced_subs`** — new script in repo root. Subcommands:
   - `forced_subs scan` — Phase 1, read-only.
   - `forced_subs apply [--max-downloads N] [--quiet]` — Phase 2.
-  - Both source shared logic from the same file (film-identification,
-    bucketing) so `apply` always re-derives its candidate set fresh from
-    `scan`'s logic rather than trusting stale state.
+  - `forced_subs report [--verbose]` — human-facing summary (see
+    "Reporting" below): added-by-script vs. still-needs-manual-attention.
+  - All three source shared logic from the same file (film-identification,
+    bucketing) so `apply`/`report` always re-derive their candidate sets
+    fresh from `scan`'s logic rather than trusting stale state.
 - **`forced_subs_known_films.yaml`** — curated list, committed to git.
   Schema per entry — note `year` is required and identifies a distinct
   *film*, not an edition: two films can share a title (e.g. Moana (2016)
