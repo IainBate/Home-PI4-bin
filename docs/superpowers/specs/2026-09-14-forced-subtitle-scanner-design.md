@@ -7,6 +7,9 @@
 in an otherwise-English film, e.g. Huttese in Star Wars, Elvish in LOTR) but
 don't. This adds a script to:
 
+0. **Identify** each file with a unique reference (IMDb ID), cached, so
+   later phases work off exact identity instead of fuzzy filename
+   guessing.
 1. **Scan** the tree and report, per file, whether it already has forced
    subs, is missing them but is a film we're confident needs them, or is
    missing them and we don't know.
