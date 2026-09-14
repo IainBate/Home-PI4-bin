@@ -29,13 +29,24 @@ don't. This adds a script to:
 ## Components
 
 - **`forced_subs`** — new script in repo root. Subcommands:
+  - `forced_subs identify [--rehash] [--set <path> <imdb_id>]` — Phase 0,
+    read-only except for its own cache file (see below).
   - `forced_subs scan` — Phase 1, read-only.
   - `forced_subs apply [--max-downloads N] [--quiet]` — Phase 2.
   - `forced_subs report [--verbose]` — human-facing summary (see
     "Reporting" below): added-by-script vs. still-needs-manual-attention.
-  - All three source shared logic from the same file (film-identification,
-    bucketing) so `apply`/`report` always re-derive their candidate sets
-    fresh from `scan`'s logic rather than trusting stale state.
+  - All source shared logic from the same file (identity lookup, bucketing)
+    so `scan`/`apply`/`report` always re-derive their candidate sets fresh
+    from current file state and the identity cache rather than trusting
+    separately-stored state.
+- **`forced_subs_file_ids`** (`/home/pi/logs/forced_subs_file_ids`) — the
+  identity cache Phase 0 writes and every later phase reads. One row per
+  file: `path`, `imdb_id`, `title`, `year`, `confidence`
+  (`hash`/`filename`/`manual`/`unresolved`), `last_checked`. Persistent,
+  not a log-and-forget file — it's the ground truth for "which film is
+  this," and a `manual` entry (set via `--set`, e.g. once you've eyeballed
+  an ambiguous Moana file yourself) is never overwritten by a later
+  `identify` run.
 - **`forced_subs_known_films.yaml`** — curated list, committed to git.
   Schema per entry — note `year` is required and identifies a distinct
   *film*, not an edition: two films can share a title (e.g. Moana (2016)
