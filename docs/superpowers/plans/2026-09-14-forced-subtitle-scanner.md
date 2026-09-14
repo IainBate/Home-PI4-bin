@@ -1414,8 +1414,41 @@ pick_edition() {
     if [ -n "$best" ] && [ "$best_diff" -le 3 ]; then echo "$best"; else echo "unmatched_edition"; fi
 }
 
+# scan_cache row: path \t file_stat_signature \t <the 8-field result line>
+# See "Incremental scanning" in the spec: lets scan skip re-probing a file
+# whose last-known bucket was HAS_FORCED and whose size/mtime haven't
+# changed since.
+scan_cache_get() {
+    local file="$1"
+    [ -f "$SCAN_CACHE" ] || return 1
+    awk -F'\t' -v p="$file" '$1==p {print; found=1} END{exit !found}' "$SCAN_CACHE"
+}
+
+scan_cache_set() {
+    local file="$1" sig="$2" result_line="$3"
+    mkdir -p "$(dirname "$SCAN_CACHE")"
+    touch "$SCAN_CACHE"
+    local tmp
+    tmp=$(mktemp)
+    awk -F'\t' -v p="$file" '$1 != p' "$SCAN_CACHE" > "$tmp"
+    printf '%s\t%s\t%s\n' "$file" "$sig" "$result_line" >> "$tmp"
+    mv "$tmp" "$SCAN_CACHE"
+}
+
 cmd_scan() {
     while IFS= read -r file; do
+        local sig cached_row
+        sig=$(file_stat_signature "$file")
+        if cached_row=$(scan_cache_get "$file"); then
+            local cached_sig cached_bucket
+            cached_sig=$(printf '%s' "$cached_row" | cut -f2)
+            cached_bucket=$(printf '%s' "$cached_row" | cut -f3)
+            if [ "$cached_sig" = "$sig" ] && [ "$cached_bucket" = "HAS_FORCED" ]; then
+                printf '%s\n' "$cached_row" | cut -f3-
+                continue
+            fi
+        fi
+
         local analyze forced coverage external bucket imdb_id="" title="" edition="" reason=""
         analyze=$("$CONVERT_VIDEO" --analyze-subs "$file" 2>/dev/null)
         forced=$(printf '%s' "$analyze" | grep -oE 'FORCED=[0-9]+' | cut -d= -f2)
