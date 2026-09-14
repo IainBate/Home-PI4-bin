@@ -1170,7 +1170,9 @@ FID_CACHE="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
 UNAVAILABLE_CACHE="${UNAVAILABLE_CACHE:-/home/pi/logs/forced_subs_unavailable_cache}"
 APPLY_LOG="${APPLY_LOG:-/home/pi/logs/forced_subs_apply_logfile}"
 SCAN_LOG="${SCAN_LOG:-/home/pi/logs/forced_subs_scan_logfile}"
-export FID_CACHE UNAVAILABLE_CACHE
+SCAN_CACHE="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
+REPORT_FILE="${FORCED_SUBS_REPORT_FILE:-$FILMS_ROOT/_FORCED_SUBTITLES_REPORT.txt}"
+export FID_CACHE UNAVAILABLE_CACHE SCAN_CACHE
 
 # shellcheck source=lib/forced_subs_common.sh
 . "$LIBDIR/forced_subs_common.sh"
