@@ -294,4 +294,55 @@ fi
 
 rm -rf "$EACDIR"
 
+echo "== main: skips an already-converted episode instead of re-encoding it =="
+
+SKTREE="$(mktemp -d)"
+mkdir -p "$SKTREE/e1" "$SKTREE/e2"
+touch "$SKTREE/e1/Show.S02E01.mkv"   # already converted in an earlier run
+touch "$SKTREE/e2/Show.S02E02.mkv"   # new, needs converting
+
+SKSTUB_DIR="$(mktemp -d)"
+SKDEST_DIR="$(mktemp -d)"
+: > "$SKSTUB_DIR/log"
+printf '%s\tCOVERAGE=0 FORCED=0 EXTERNAL_SRT=0\n' "$SKTREE/e1/S02E01.mkv" > "$SKSTUB_DIR/profiles"
+printf '%s\tCOVERAGE=0 FORCED=0 EXTERNAL_SRT=0\n' "$SKTREE/e2/S02E02.mkv" >> "$SKSTUB_DIR/profiles"
+: > "$SKSTUB_DIR/faillist"
+mkdir -p "$SKDEST_DIR/ShowX/Season 2"
+touch "$SKDEST_DIR/ShowX/Season 2/S02E01.mp4"   # pre-existing output from "before"
+
+CONVERT_VIDEO="$(make_stub_convert_video "$SKSTUB_DIR" "$SKSTUB_DIR/profiles" "$SKSTUB_DIR/faillist" "$SKDEST_DIR")"
+FILMS_BASE_DIR="$SKDEST_DIR"
+
+output="$(main "$SKTREE" "ShowX" </dev/null 2>&1)"
+
+log_content="$(cat "$SKSTUB_DIR/log")"
+assert_eq "does not re-invoke convert_video for the already-converted episode" "" "$(grep 'S02E01' <<< "$log_content")"
+assert_contains "does invoke convert_video for the new episode" "$log_content" "S02E02"
+assert_contains "reports the already-converted episode as skipped" "$output" "S02E01"
+
+rm -rf "$SKTREE" "$SKSTUB_DIR" "$SKDEST_DIR"
+
+echo "== main: still organizes stray destination files even when nothing new is renamed =="
+
+NRTREE="$(mktemp -d)"
+mkdir -p "$NRTREE/nomatch"
+touch "$NRTREE/nomatch/random_video.mkv"   # nothing here will match/rename
+
+NRSTUB_DIR="$(mktemp -d)"
+NRDEST_DIR="$(mktemp -d)"
+: > "$NRSTUB_DIR/log"
+: > "$NRSTUB_DIR/profiles"
+: > "$NRSTUB_DIR/faillist"
+mkdir -p "$NRDEST_DIR/ShowX"
+touch "$NRDEST_DIR/ShowX/S03E01.mp4"   # stray output left over from an earlier interrupted run
+
+CONVERT_VIDEO="$(make_stub_convert_video "$NRSTUB_DIR" "$NRSTUB_DIR/profiles" "$NRSTUB_DIR/faillist" "$NRDEST_DIR")"
+FILMS_BASE_DIR="$NRDEST_DIR"
+
+main "$NRTREE" "ShowX" </dev/null >/dev/null 2>&1
+
+assert_file_exists "stray file still gets organized into Season 3 on a no-rename run" "$NRDEST_DIR/ShowX/Season 3/S03E01.mp4"
+
+rm -rf "$NRTREE" "$NRSTUB_DIR" "$NRDEST_DIR"
+
 test_summary_and_exit
