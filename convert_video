@@ -246,6 +246,7 @@ else
         echo "  -a, --audio <id>  Specify audio stream index (default: 0)"
         echo "  --hard_sub        Hard encode all subtitles"
         echo "  --forced          Include only forced English subtitles without prompting"
+        echo "  --no-subs         Skip subtitle analysis entirely (no subtitles wanted)"
         echo "  -c, --colon       Replace dashes with colons in filename and metadata"
         exit 1
     fi
