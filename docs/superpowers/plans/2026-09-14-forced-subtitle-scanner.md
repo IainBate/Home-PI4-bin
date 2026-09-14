@@ -1952,6 +1952,16 @@ Append, following the existing comment style in the file:
 # (--max-downloads) to stay within the OpenSubtitles free-tier quota.
 0 4 * * Sun cd /home/pi/Home_PI4_bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
 0 5 * * * cd /home/pi/Home_PI4_bin && ./forced_subs apply --quiet
+
+# The Pi reboots weekly (its own separate cron job) and identify's first
+# full-library pass can run long enough to still be mid-run when that
+# happens. identify is safe to interrupt and re-run - it caches each
+# file's result as it goes (forced_subs_file_ids, written atomically) and
+# skips anything already resolved - so instead of a watchdog, this just
+# resumes it once after every boot. `sleep 60` gives the HDD mount and
+# network time to come up first; harmless/near-instant once identify has
+# actually finished the whole library, since there's nothing left to do.
+@reboot sleep 60 && cd /home/pi/Home_PI4_bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
 ```
 
 (Adjust `/home/pi/Home_PI4_bin` if this repo is checked out elsewhere on the Pi — match whatever path `convert_video`/`films_backup` already use in the live crontab.)
