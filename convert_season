@@ -363,7 +363,7 @@ main() {
     # Always runs, even on a no-op run: catches stray already-converted
     # episodes sitting at the destination top level independent of
     # whatever this run itself did or didn't rename/convert.
-    organize_into_seasons "$FILMS_BASE_DIR/$show_name"
+    organize_into_seasons "$FILMS_BASE_DIR/$(show_dest_path "$show_name")"
     echo "Done."
 }
 
