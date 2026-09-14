@@ -227,10 +227,12 @@ three clearly separated sections:
    forced subs after the above: `NEEDS_FORCED_KNOWN` entries that stayed
    unresolved (unavailable/ambiguous after search) plus every
    `NEEDS_FORCED_UNKNOWN` entry (title not on the curated list at all).
-   Each line says why (`no_match_found`, `ambiguous_title_multiple_years`,
-   `not_on_known_list`, etc.) so it's clear whether the fix is "add this
-   title to the curated list" or "no forced-sub release exists on
-   OpenSubtitles for this one — find/download manually."
+   Each line says why (`unresolved: no_match`,
+   `unresolved: ambiguous_title_multiple_years`, `not_on_known_list`,
+   `no_match_found`, `ambiguous`, etc.) so it's clear whether the fix is
+   "identify this file manually via `forced_subs identify --set`," "add
+   this `imdb_id` to the curated list," or "no forced-sub release exists
+   on OpenSubtitles for this one — find/download manually."
 
 This is the output you'd actually run and read after a batch of daily
 `apply` runs has had time to work through the backlog.
