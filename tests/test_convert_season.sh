@@ -261,4 +261,37 @@ assert_eq "both files converted with the single decision" "2" "$line_count"
 
 rm -rf "$LTREE" "$LSTUB_DIR" "$LDEST_DIR"
 
+# --- season_number_from_tag -------------------------------------------------
+echo "== season_number_from_tag =="
+
+assert_eq "S02E01 -> 2 (leading zero stripped)" "2" "$(season_number_from_tag "S02E01")"
+assert_eq "S10E12 -> 10" "10" "$(season_number_from_tag "S10E12")"
+
+# --- episode_already_converted ----------------------------------------------
+echo "== episode_already_converted =="
+
+EACDIR="$(mktemp -d)"
+mkdir -p "$EACDIR/ShowX/Season 2"
+touch "$EACDIR/ShowX/Season 2/S02E01.mp4"
+touch "$EACDIR/ShowX/S02E05.mp4"   # converted but not yet organized
+
+FILMS_BASE_DIR="$EACDIR"
+if episode_already_converted "ShowX" "S02E01"; then
+    pass "detects an already-organized episode"
+else
+    fail "detects an already-organized episode"
+fi
+if episode_already_converted "ShowX" "S02E05"; then
+    pass "detects an already-converted-but-not-yet-organized episode"
+else
+    fail "detects an already-converted-but-not-yet-organized episode"
+fi
+if episode_already_converted "ShowX" "S02E09"; then
+    fail "does not falsely flag an episode that was never converted"
+else
+    pass "does not falsely flag an episode that was never converted"
+fi
+
+rm -rf "$EACDIR"
+
 test_summary_and_exit
