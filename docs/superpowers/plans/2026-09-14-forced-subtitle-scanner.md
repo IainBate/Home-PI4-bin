@@ -1779,7 +1779,7 @@ git commit -m "Add forced_subs apply subcommand"
 
 **Interfaces:**
 - Consumes: `cmd_scan` (Task 7), `$APPLY_LOG`, `unavailable_cache_is_fresh`/`$UNAVAILABLE_CACHE` (Task 8).
-- Produces: `forced_subs report [--verbose]` — stdout only, three labelled sections.
+- Produces: `forced_subs report [--verbose]` — three labelled sections, printed to stdout **and** written to `$REPORT_FILE` (default `$FILMS_ROOT/_FORCED_SUBTITLES_REPORT.txt` — see the spec's "Reporting" section: this puts it directly in the films share, not just the Pi's log directory). Overwritten each run, not appended.
 
 - [ ] **Step 1: Write the failing test**
 
