@@ -456,6 +456,7 @@ else
         echo ""
 
         # Prompt user (unless coverage is high)
+        # NOTE: "15" duplicated in convert_season's FORCED_SUB_COVERAGE_THRESHOLD - see prompt_for_subtitles() above.
         if (( $(echo "$FORCED_COVERAGE_PCT >= 15" | bc -l 2>/dev/null || echo "0") )); then
             INCLUDE_SUBTITLES=true
             echo "Forced English subtitles detected with ${FORCED_COVERAGE_PCT}% coverage."
