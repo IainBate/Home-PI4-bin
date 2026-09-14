@@ -267,6 +267,7 @@ assert_contains "reports the anomaly" "$output" "S02E03"
 log_content="$(cat "$STUB_DIR/log")"
 assert_contains "converts ok1" "$log_content" "file=$MTREE/ok1/S02E01.mkv genre=ShowX"
 assert_contains "attempts failme" "$log_content" "file=$MTREE/failme/S02E02.mkv genre=ShowX"
+assert_contains "ok1 (NONE bucket) uses --no-subs, skipping convert_video's own probe" "$log_content" "file=$MTREE/ok1/S02E01.mkv genre=ShowX no_subs=yes"
 line_count=$(wc -l < "$STUB_DIR/log" | tr -d ' ')
 assert_eq "exactly 2 real conversion attempts (dupes/nomatch/anomaly excluded)" "2" "$line_count"
 
