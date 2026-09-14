@@ -1,0 +1,122 @@
+#!/bin/bash
+# forced_subs - scan /mnt/HDD/films for missing forced-English subtitles,
+# identify films via OpenSubtitles moviehash + a curated list, and fetch/
+# remux matches within a daily API budget.
+# Usage: forced_subs {identify|scan|apply|report} [options]
+# See docs/superpowers/specs/2026-09-14-forced-subtitle-scanner-design.md.
+set -uo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LIBDIR="${FORCED_SUBS_LIBDIR:-$REPO_ROOT/lib}"
+CONVERT_VIDEO="${FORCED_SUBS_CONVERT_VIDEO:-$REPO_ROOT/convert_video}"
+KNOWN_FILMS_YAML="${FORCED_SUBS_KNOWN_FILMS:-$REPO_ROOT/forced_subs_known_films.yaml}"
+FILMS_ROOT="${FORCED_SUBS_FILMS_ROOT:-/mnt/HDD/films}"
+FID_CACHE="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
+UNAVAILABLE_CACHE="${UNAVAILABLE_CACHE:-/home/pi/logs/forced_subs_unavailable_cache}"
+APPLY_LOG="${APPLY_LOG:-/home/pi/logs/forced_subs_apply_logfile}"
+SCAN_LOG="${SCAN_LOG:-/home/pi/logs/forced_subs_scan_logfile}"
+SCAN_CACHE="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
+REPORT_FILE="${FORCED_SUBS_REPORT_FILE:-$FILMS_ROOT/_FORCED_SUBTITLES_REPORT.txt}"
+export FID_CACHE UNAVAILABLE_CACHE SCAN_CACHE
+
+# shellcheck source=lib/forced_subs_common.sh
+. "$LIBDIR/forced_subs_common.sh"
+
+load_opensubtitles_creds() {
+    OST_API_KEY=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles api_key)
+    OST_USERNAME=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles username)
+    OST_PASSWORD=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles password)
+    OST_USER_AGENT="forced_subs v1.0.0"
+    export OST_API_KEY OST_USERNAME OST_PASSWORD OST_USER_AGENT
+}
+
+opensubtitles_login() {
+    load_opensubtitles_creds
+    OST_TOKEN=$(python3 "$LIBDIR/ost.py" login)
+    export OST_TOKEN
+}
+
+# --- identify -----------------------------------------------------------
+
+forced_subs_identify_one() {
+    local file="$1"
+    local existing_conf
+    existing_conf=$(fid_cache_get_field "$file" confidence 2>/dev/null || true)
+    if [ "$existing_conf" = "manual" ]; then
+        return 0
+    fi
+    if [ -n "$existing_conf" ] && [ "${REHASH:-false}" != "true" ]; then
+        return 0
+    fi
+
+    local hash hash_result imdb_id="" title="" year="" confidence reason=""
+    hash=$(python3 "$LIBDIR/ost.py" hash "$file")
+    hash_result=$(python3 "$LIBDIR/ost.py" identify_by_hash "$hash" 2>>"${SCAN_LOG:-/dev/null}" || true)
+
+    if [ -n "$hash_result" ]; then
+        IFS=$'\t' read -r imdb_id title year <<< "$hash_result"
+        confidence="hash"
+    else
+        local norm_title year_guess fallback_result count
+        norm_title=$(normalize_title_from_path "$file")
+        year_guess=$(extract_year_from_name "$(basename "$file")")
+        fallback_result=$(python3 "$LIBDIR/known_films.py" find_by_title_year "$KNOWN_FILMS_YAML" "$norm_title" "$year_guess")
+        count=$(printf '%s\n' "$fallback_result" | grep -c . || true)
+        if [ "$count" -eq 1 ]; then
+            IFS=$'\t' read -r imdb_id title year <<< "$fallback_result"
+            confidence="filename"
+        elif [ "$count" -gt 1 ]; then
+            confidence="unresolved"; reason="ambiguous_title_multiple_years"
+        else
+            confidence="unresolved"; reason="no_match"
+        fi
+    fi
+    fid_cache_set "$file" "$imdb_id" "$title" "$year" "$confidence" "$reason" "$(date -I)"
+}
+
+cmd_identify_set() {
+    local file="$1" imdb_id="$2" lookup title="" year=""
+    lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
+    if [ -n "$lookup" ]; then
+        IFS=$'\t' read -r title year _ <<< "$lookup"
+    fi
+    fid_cache_set "$file" "$imdb_id" "$title" "$year" "manual" "" "$(date -I)"
+}
+
+cmd_identify() {
+    REHASH=false
+    local set_path="" set_imdb=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --rehash) REHASH=true; shift ;;
+            --set) set_path="$2"; set_imdb="$3"; shift 3 ;;
+            *) shift ;;
+        esac
+    done
+    if [ -n "$set_path" ]; then
+        cmd_identify_set "$set_path" "$set_imdb"
+        return 0
+    fi
+    while IFS= read -r file; do
+        forced_subs_identify_one "$file"
+    done < <(walk_films "$FILMS_ROOT")
+}
+
+# --- dispatch -------------------------------------------------------------
+
+main() {
+    local cmd="${1:-}"
+    shift || true
+    case "$cmd" in
+        identify)
+            load_opensubtitles_creds
+            cmd_identify "$@"
+            ;;
+        *)
+            echo "Usage: forced_subs {identify|scan|apply|report} [options]" >&2
+            exit 2
+            ;;
+    esac
+}
+
+main "$@"
