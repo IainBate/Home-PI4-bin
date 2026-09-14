@@ -1298,8 +1298,8 @@ git commit -m "Add forced_subs identify subcommand"
 - Test: `tests/test_forced_subs_scan.sh`
 
 **Interfaces:**
-- Consumes: `walk_films`, `forced_subs_identify_one`, `fid_cache_get_field` (this file); `convert_video --analyze-subs` (existing script); `known_films.py lookup`.
-- Produces: `forced_subs scan` → prints and appends to `$SCAN_LOG` one line per file: `<bucket>\t<path>\t<imdb_id>\t<title>\t<edition>\t<coverage>\t<external_srt>\t<reason>`. `cmd_scan` (bash function) is reused as-is by `apply`/`report` in later tasks.
+- Consumes: `walk_films`, `forced_subs_identify_one`, `fid_cache_get_field`, `file_stat_signature` (Task 3); `convert_video --analyze-subs` (existing script); `known_films.py lookup`.
+- Produces: `forced_subs scan` → prints and appends to `$SCAN_LOG` one line per file: `<bucket>\t<path>\t<imdb_id>\t<title>\t<edition>\t<coverage>\t<external_srt>\t<reason>`. `cmd_scan` (bash function) is reused as-is by `apply`/`report` in later tasks. Also produces `scan_cache_get`/`scan_cache_set` (bash functions) backing `$SCAN_CACHE` — see "Incremental scanning" in the spec: a file whose cached bucket was `HAS_FORCED` and whose `file_stat_signature` is unchanged is replayed from cache instead of re-run through `convert_video --analyze-subs`.
 
 - [ ] **Step 1: Write the failing test**
 
