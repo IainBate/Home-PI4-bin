@@ -1062,7 +1062,7 @@ git commit -m "Add known_films.py reader and seed forced_subs_known_films.yaml"
 
 **Interfaces:**
 - Consumes: `walk_films`, `normalize_title_from_path`, `extract_year_from_name`, `fid_cache_get_field`, `fid_cache_set` (Task 3); `find_by_title_year`/`lookup` via `known_films.py` (Task 5); `hash`/`identify_by_hash` via `ost.py` (Task 4).
-- Produces: `forced_subs identify [--rehash]`, `forced_subs identify --set <path> <imdb_id>`. Env overrides for testing: `FORCED_SUBS_LIBDIR` (default `<repo>/lib`), `FORCED_SUBS_KNOWN_FILMS` (default `<repo>/forced_subs_known_films.yaml`), `FID_CACHE`.
+- Produces: `forced_subs identify [--rehash]`, `forced_subs identify --set <path> <imdb_id>`. Env overrides for testing: `FORCED_SUBS_LIBDIR` (default `<repo>/lib`), `FORCED_SUBS_KNOWN_FILMS` (default `<repo>/forced_subs_known_films.yaml`), `FID_CACHE`, `FORCED_SUBS_FILMS_ROOT` (default `/mnt/HDD/films`), `SCAN_CACHE` (default `/home/pi/logs/forced_subs_scan_cache`, used from Task 7 onward), `FORCED_SUBS_REPORT_FILE` (default `$FILMS_ROOT/_FORCED_SUBTITLES_REPORT.txt`, used from Task 9 onward).
 
 - [ ] **Step 1: Write the failing test**
 
