@@ -90,10 +90,15 @@ rename_to_tag() {
 
 # --- find_video_files_with_tags ----------------------------------------
 # Like find_video_files, but prints "TAG\tPATH" per line (TAG empty when
-# the filename has no SxxEyy marker).
+# the filename has no SxxEyy marker). Reads find_video_files's
+# NUL-delimited output safely, but its own output here is newline-
+# delimited (one record per line) for the simpler downstream parsing
+# main() does - a path containing a literal tab or newline would still
+# defeat that record format, but that's a deeper redesign than the
+# specific find|while-read gap this was written to close.
 find_video_files_with_tags() {
     local root="$1" file tag
-    while IFS= read -r file; do
+    while IFS= read -r -d '' file; do
         tag=$(extract_episode_tag "$(basename "$file")")
         printf '%s\t%s\n' "$tag" "$file"
     done < <(find_video_files "$root")
