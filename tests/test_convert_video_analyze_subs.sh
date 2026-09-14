@@ -103,15 +103,31 @@ EOF
 ffmpeg -y -i "$NSDIR/base.mp4" -i "$NSDIR/subs.srt" -map 0:v -map 0:a -map 1:s -c:v libx264 -c:a aac -c:s srt \
     -metadata:s:s:0 language=eng -disposition:s:0 forced "$NSDIR/Movie With Subs.mkv" -hide_banner -loglevel error
 
-out=$(cd "$NSDIR" && "$CONVERT_VIDEO" -n --no-subs "Movie With Subs.mkv" "TestGenre" </dev/null 2>&1)
+# Genre is a unique, obviously-throwaway name: on a machine where
+# /mnt/HDD/films actually exists (i.e. the real Pi target, unlike this
+# possibly-macOS dev box), convert_video's final mv *succeeds* into
+# /mnt/HDD/films/<genre>/, unlike on a box without that mount where it's
+# left behind as tmp_*.mp4 in cwd instead. The test must work - and clean
+# up after itself - in both cases without ever assuming which one it's on.
+NS_GENRE="convert_video_test_no_subs_$(basename "$NSDIR")"
+REAL_DEST="/mnt/HDD/films/$NS_GENRE/Movie With Subs.mp4"
+
+out=$(cd "$NSDIR" && "$CONVERT_VIDEO" -n --no-subs "Movie With Subs.mkv" "$NS_GENRE" </dev/null 2>&1)
 
 assert_eq "no-subs: never runs the subtitle analysis probe" "no" "$([[ "$out" == *"Analyzing subtitles"* ]] && echo yes || echo no)"
 
 tmp_output=$(find "$NSDIR" -maxdepth 1 -name "tmp_*.mp4" | head -1)
+if [[ -z "$tmp_output" && -f "$REAL_DEST" ]]; then
+    tmp_output="$REAL_DEST"
+fi
 assert_eq "no-subs: still produces an encoded output despite skipping analysis" "no" "$([[ -z "$tmp_output" ]] && echo yes || echo no)"
 sub_stream_count=$(ffprobe -v error -select_streams s -show_entries stream=index -of csv=p=0 "$tmp_output" 2>/dev/null | wc -l | tr -d ' ')
 assert_eq "no-subs: output has no subtitle stream (source had one, but -no-subs forces -sn)" "0" "$sub_stream_count"
 
+# Clean up wherever the output actually landed, including the real media
+# library path when this ran somewhere /mnt/HDD/films genuinely exists.
+rm -f "$REAL_DEST"
+rmdir "/mnt/HDD/films/$NS_GENRE" 2>/dev/null
 rm -rf "$NSDIR"
 
 test_summary_and_exit
