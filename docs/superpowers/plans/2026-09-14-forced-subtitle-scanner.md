@@ -423,6 +423,16 @@ assert_eq "reads opensubtitles.api_key" "abc123" "$(yaml_get_2level "$WORK/sampl
 assert_eq "reads a different top-level block" "deadbeef" "$(yaml_get_2level "$WORK/sample.yaml" secrets_backup passphrase_hash)"
 assert_eq "missing key prints nothing" "" "$(yaml_get_2level "$WORK/sample.yaml" opensubtitles password)"
 
+echo "== file_stat_signature =="
+echo "hello" > "$WORK/sig.txt"
+sig1=$(file_stat_signature "$WORK/sig.txt")
+sig1_again=$(file_stat_signature "$WORK/sig.txt")
+assert_eq "signature is stable for an untouched file" "$sig1" "$sig1_again"
+sleep 1
+echo "hello world, this is longer" > "$WORK/sig.txt"
+sig2=$(file_stat_signature "$WORK/sig.txt")
+assert_eq "signature changes when the file's content/size changes" "no" "$([[ "$sig1" == "$sig2" ]] && echo yes || echo no)"
+
 echo "== fid_cache round-trips a row =="
 export FID_CACHE="$WORK/fid_cache"
 fid_cache_set "/mnt/HDD/films/Moana (2016).mp4" "tt3521164" "Moana" "2016" "hash" "" "2026-09-14"
