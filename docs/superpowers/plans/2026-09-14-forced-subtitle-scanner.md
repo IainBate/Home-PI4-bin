@@ -491,6 +491,12 @@ imdb_tt_to_numeric() {
     printf '%s' "${1#tt}" | sed 's/^0*//'
 }
 
+# "<size>:<mtime_epoch>" for a file - portable across GNU stat (the Pi) and
+# BSD stat (macOS, where these tests are run from during development).
+file_stat_signature() {
+    stat -c '%s:%Y' "$1" 2>/dev/null || stat -f '%z:%m' "$1"
+}
+
 # Reads a simple two-level "top_key:\n  sub_key: value" YAML file. Not a
 # general YAML parser - deliberately limited to this fixed shape (see
 # secrets.yaml/secrets.yaml.example), matching this repo's dependency-free
