@@ -1891,6 +1891,12 @@ report_body() {
         fi
     done
 }
+
+cmd_report() {
+    local verbose="$1"
+    mkdir -p "$(dirname "$REPORT_FILE")" 2>/dev/null || true
+    report_body "$verbose" | tee "$REPORT_FILE"
+}
 ```
 
 Add the `report` case to `main`'s dispatch:
