@@ -358,6 +358,10 @@ echo "Target bitrate: ${target_bitrate}k"
 # file, above option parsing, so --analyze-subs can use them) ---
 
 # Function to prompt user about low-coverage forced subtitles
+# NOTE: the "15" threshold here and below is also duplicated in
+# convert_season's FORCED_SUB_COVERAGE_THRESHOLD, which mirrors this
+# function's HIGH/LOW split to decide when convert_season needs to ask
+# about a season's subtitle profile. If this changes, update that too.
 prompt_for_subtitles() {
     local coverage="$1"
 
