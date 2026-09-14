@@ -263,6 +263,26 @@ assert_eq "both files converted with the single decision" "2" "$line_count"
 
 rm -rf "$LTREE" "$LSTUB_DIR" "$LDEST_DIR"
 
+# --- show_dest_path ----------------------------------------------------------
+echo "== show_dest_path =="
+
+assert_eq "ordinary show name maps to itself" "Ted Lasso" "$(show_dest_path "Ted Lasso")"
+assert_eq "Modern mirrors convert_video's Family/Modern special case" "Family/Modern" "$(show_dest_path "Modern")"
+assert_eq "Retro mirrors convert_video's Family/Retro special case" "Family/Retro" "$(show_dest_path "Retro")"
+
+echo "== episode_already_converted respects the Modern/Retro destination path =="
+
+MRDIR="$(mktemp -d)"
+mkdir -p "$MRDIR/Family/Modern/Season 1"
+touch "$MRDIR/Family/Modern/Season 1/S01E01.mp4"
+FILMS_BASE_DIR="$MRDIR"
+if episode_already_converted "Modern" "S01E01"; then
+    pass "finds the episode under Family/Modern, not a literal 'Modern' folder"
+else
+    fail "finds the episode under Family/Modern, not a literal 'Modern' folder"
+fi
+rm -rf "$MRDIR"
+
 # --- season_number_from_tag -------------------------------------------------
 echo "== season_number_from_tag =="
 
