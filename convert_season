@@ -157,6 +157,22 @@ classify_profile() {
     profile_bucket "$("$CONVERT_VIDEO" --analyze-subs "$file" 2>/dev/null)"
 }
 
+# --- show_dest_path -------------------------------------------------------
+# Mirrors convert_video's own DEST_PATH special case (convert_video:263-269):
+# genres "Modern" and "Retro" actually land under "Family/Modern" and
+# "Family/Retro" rather than a literal top-level folder of that name.
+# Anything relying on where convert_video actually put a file (here:
+# episode_already_converted and main()'s final organize call) needs to
+# agree with that, not just assume $FILMS_BASE_DIR/$show_name.
+show_dest_path() {
+    local show_name="$1"
+    if [[ "$show_name" == "Modern" || "$show_name" == "Retro" ]]; then
+        echo "Family/$show_name"
+    else
+        echo "$show_name"
+    fi
+}
+
 # --- season_number_from_tag ---------------------------------------------
 # "S02E01" -> "2" (leading zero stripped, for use in a "Season N" folder
 # name). Shared by organize_into_seasons and episode_already_converted so
