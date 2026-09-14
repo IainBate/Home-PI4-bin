@@ -46,12 +46,15 @@ extract_episode_tag() {
 
 # --- find_video_files -------------------------------------------------
 # Recursively lists video files (mkv/mp4/avi/m4v, case-insensitive) under
-# a directory tree, one path per line.
+# a directory tree, NUL-delimited (not newline-delimited: ripped media
+# filenames are unlikely to contain a literal newline, but find's own
+# default newline-per-result output would silently mis-split one that
+# did). Consume with `while IFS= read -r -d '' path`.
 find_video_files() {
     local root="$1"
     find "$root" -type f \( \
         -iname "*.mkv" -o -iname "*.mp4" -o -iname "*.avi" -o -iname "*.m4v" \
-    \)
+    \) -print0
 }
 
 # --- rename_to_tag ----------------------------------------------------
