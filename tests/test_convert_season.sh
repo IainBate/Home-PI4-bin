@@ -184,8 +184,12 @@ echo "CONVERT file=\$file genre=\$genre stdin=\$answer" >> "$1/log"
 if grep -qxF "\$file" "$3" 2>/dev/null; then
     exit 1
 fi
-mkdir -p "$4/\$genre"
-cp "\$file" "$4/\$genre/\$(basename "\${file%.*}").mp4"
+dest_path="\$genre"
+if [[ "\$genre" == "Modern" || "\$genre" == "Retro" ]]; then
+    dest_path="Family/\$genre"
+fi
+mkdir -p "$4/\$dest_path"
+cp "\$file" "$4/\$dest_path/\$(basename "\${file%.*}").mp4"
 exit 0
 STUB
     chmod +x "$stub"
