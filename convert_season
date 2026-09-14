@@ -20,6 +20,10 @@ set -o pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONVERT_VIDEO="$SCRIPT_DIR/convert_video"
+# Mirrors the "15" literal in convert_video's prompt_for_subtitles() and
+# analyze_subtitles() call site (both marked with a matching NOTE there) -
+# it's what decides whether convert_video would auto-include forced subs
+# or prompt. If that changes, this must change too.
 FORCED_SUB_COVERAGE_THRESHOLD=15
 # Where convert_video actually writes its output (mirrors its own hardcoded
 # /mnt/HDD/films/<genre> convention). Overridable so tests can point it at a
