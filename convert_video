@@ -42,6 +42,115 @@ FORCE_NO_GPU=false
 REPLACE_COLON=false
 OLYMPUS_MODE=false
 TARGET_DIR="."
+ANALYZE_MODE=false
+ANALYZE_FILE=""
+
+# --- Subtitle Detection and Processing ---
+# Defined up front (rather than inline further down, where they used to
+# live) so --analyze-subs can call analyze_subtitles before any of the
+# standard/olympus argument handling below.
+
+# Function to check if a subtitle stream is English and forced
+check_english_forced_sub() {
+    local stream_info="$1"
+
+    # Check if it's an English forced subtitle stream
+    # Pattern: Stream #0:X(eng): Subtitle: ... (forced)
+    if echo "$stream_info" | grep -q "Subtitle.* eng .*forced\|Subtitle.*forced.*eng"; then
+        return 0
+    fi
+
+    # Alternative pattern matching
+    if echo "$stream_info" | grep -E "Stream #0:[0-9]+\(eng\): Subtitle:.*forced" > /dev/null; then
+        return 0
+    fi
+
+    return 1
+}
+
+# Function to get subtitle stream info and count forced English subs
+analyze_subtitles() {
+    local filename="$1"
+
+    echo "Analyzing subtitles..."
+
+    # Get all subtitle streams info
+    SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1)
+
+    FORCED_ENG_SUBS=()
+    ALL_SUB_STREAMS=()
+
+    # Extract all subtitle stream lines
+    while IFS= read -r line; do
+        if echo "$line" | grep -q "Subtitle:"; then
+            ALL_SUB_STREAMS+=("$line")
+
+            # Check if this is a forced English subtitle
+            if check_english_forced_sub "$line"; then
+                FORCED_ENG_SUBS+=("$line")
+            fi
+        fi
+    done <<< "$SUBTITLE_INFO"
+
+    echo "Found ${#ALL_SUB_STREAMS[@]} subtitle stream(s)"
+
+    # Check for external SRT files
+    dir=$(dirname "$filename")
+    base="${filename1%.*}"
+    EXTERNAL_SRT_FILES=()
+
+    # Look for .srt files in same directory matching the video basename or generic srt patterns
+    while IFS= read -r -d '' srt_file; do
+        if [[ "$srt_file" != "" ]]; then
+            EXTERNAL_SRT_FILES+=("$srt_file")
+        fi
+    done < <(find "$dir" -maxdepth 1 -type f -name "*.srt" -print0 2>/dev/null | sort -z)
+
+    echo "Found ${#EXTERNAL_SRT_FILES[@]} external subtitle file(s)"
+
+    # Calculate forced coverage if we have forced English subs
+    FORCED_COVERAGE_PCT=0
+
+    if [[ ${#FORCED_ENG_SUBS[@]} -gt 0 ]]; then
+        # Get video duration in seconds
+        VIDEO_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$filename" 2>/dev/null)
+
+        if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "N/A" ]]; then
+            # Extract forced subtitle durations using ffprobe packet data
+            TOTAL_FORCED_DURATION=0
+
+            for sub_stream in "${FORCED_ENG_SUBS[@]}"; do
+                # Extract stream index from line like "Stream #0:2(eng): Subtitle..."
+                STREAM_IDX=$(echo "$sub_stream" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+
+                if [[ -n "$STREAM_IDX" ]]; then
+                    # Get subtitle packet times for this stream
+                    PACKET_DATA=$(ffprobe -v error -select_streams s:$STREAM_IDX -show_entries packet=pts_time,duration -of csv=p=0 "$filename" 2>/dev/null)
+
+                    while IFS=',' read -r pts duration; do
+                        if [[ -n "$duration" && "$duration" != "N/A" ]]; then
+                            TOTAL_FORCED_DURATION=$(echo "$TOTAL_FORCED_DURATION + $duration" | bc 2>/dev/null || echo "$TOTAL_FORCED_DURATION")
+                        fi
+                    done <<< "$PACKET_DATA"
+                fi
+            done
+
+            if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
+                FORCED_COVERAGE_PCT=$(echo "scale=1; ($TOTAL_FORCED_DURATION / $VIDEO_DURATION) * 100" | bc 2>/dev/null || echo "0")
+            fi
+
+            # Round to integer for display
+            FORCED_COVERAGE_PCT_INT=$(printf "%.0f" "$FORCED_COVERAGE_PCT" 2>/dev/null || echo "0")
+
+            if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
+                echo "Forced English subtitle coverage: ${FORCED_COVERAGE_PCT}% of video"
+            fi
+        fi
+    fi
+
+    # Store results for later use
+    FORCED_ENG_COUNT=${#FORCED_ENG_SUBS[@]}
+}
 
 # Parse options
 while [[ "$#" -gt 0 ]]; do
@@ -71,6 +180,11 @@ while [[ "$#" -gt 0 ]]; do
             FORCED_SUBS=true
             shift
             ;;
+        --analyze-subs)
+            ANALYZE_MODE=true
+            ANALYZE_FILE="$2"
+            shift 2
+            ;;
         --olympus)
             OLYMPUS_MODE=true
             TARGET_DIR="${2:-.}"
@@ -80,6 +194,24 @@ while [[ "$#" -gt 0 ]]; do
             break
     esac
 done
+
+# --- Analyze-only mode ---
+# Runs only the subtitle analysis above (no ffmpeg encode) and prints a
+# single machine-readable result line, so other tools can classify a
+# file's subtitle situation before deciding whether/how to convert it.
+if [ "$ANALYZE_MODE" = "true" ]; then
+    filename="$ANALYZE_FILE"
+    filename1=$(basename "$filename")
+    analyze_subtitles "$filename"
+
+    forced=0
+    [[ ${#FORCED_ENG_SUBS[@]} -gt 0 ]] && forced=1
+    external=0
+    [[ ${#EXTERNAL_SRT_FILES[@]} -gt 0 ]] && external=1
+
+    echo "COVERAGE=${FORCED_COVERAGE_PCT} FORCED=${forced} EXTERNAL_SRT=${external}"
+    exit 0
+fi
 
 if [ "$OLYMPUS_MODE" = "true" ]; then
     # Olympus mode: process directory, no genre argument needed
