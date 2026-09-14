@@ -1986,6 +1986,8 @@ cd ~/Home_PI4_bin && git pull
 
 Review anything under "you'll need to sort these out yourself" with reason `ambiguous_title_multiple_years` or `no_match` — resolve genuine curated-list gaps with `--set`, or add missing titles/aliases/the 2026 Moana entry (once its IMDb ID/runtime are known) to `forced_subs_known_films.yaml`.
 
+`report` also leaves `/mnt/HDD/films/_FORCED_SUBTITLES_REPORT.txt` on the share itself (Task 9), so this same summary is browsable without SSH-ing back in. `apply` is deliberately not run by hand here — it's rate-limited to `--max-downloads` per day by design (Task 8), so fixing the whole backlog happens gradually via the cron job over the following days/weeks, not in this one session.
+
 ---
 
 ## Self-Review Notes
