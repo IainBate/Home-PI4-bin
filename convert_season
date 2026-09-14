@@ -177,11 +177,12 @@ episode_already_converted() {
 organize_into_seasons() {
     local dest_dir="$1" file base season_num
 
+    [[ -d "$dest_dir" ]] || return 0
+
     while IFS= read -r file; do
         [[ -e "$file" ]] || continue
         base=$(basename "$file")
-        season_num=$(printf '%s' "$base" | grep -oE '^S[0-9]{2}' | sed 's/^S//')
-        season_num=$((10#$season_num))
+        season_num=$(season_number_from_tag "${base:0:6}")
 
         mkdir -p "$dest_dir/Season $season_num"
         mv "$file" "$dest_dir/Season $season_num/"
