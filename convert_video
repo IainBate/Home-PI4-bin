@@ -405,7 +405,14 @@ FORCED_SUB_MAP=""
 SUBTITLE_CODEC=""
 INCLUDE_SUBTITLES=false
 
-if [ "$HARD_SUB" = "true" ]; then
+if [ "$NO_SUBS" = "true" ]; then
+    # Caller already knows (from its own analysis) that this file needs no
+    # subtitle handling at all - skip analyze_subtitles entirely rather
+    # than re-running a probe the caller already did. INCLUDE_SUBTITLES
+    # stays false, so -sn is used same as the "nothing detected" outcome
+    # of the auto-detect path below.
+    echo "Subtitles skipped (--no-subs: decision already made by caller)."
+elif [ "$HARD_SUB" = "true" ]; then
     # Hard-encode all subtitles (existing behavior)
     echo "Hard-encoding all embedded subtitles..."
 elif [ "$FORCED_SUBS" = "true" ]; then
