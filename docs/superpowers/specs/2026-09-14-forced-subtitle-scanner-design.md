@@ -284,6 +284,13 @@ updated per its existing pattern for new services):
   just needs to pick up whatever's been added since last time — already-
   cached files are skipped).
 - `forced_subs apply --quiet` — daily, per the rate-limited design above.
+- `forced_subs identify --quiet` also runs `@reboot` (the Pi reboots
+  weekly via its own separate cron job). `identify` caches each file's
+  result as it goes and skips anything already resolved, so it's always
+  safe to interrupt and re-run — this just means a reboot mid-run resumes
+  automatically on the next boot instead of waiting for next Sunday. No
+  separate watchdog/process-monitoring is needed: cron re-firing on
+  schedule (daily/weekly/on reboot) already is the retry mechanism.
 
 Initial run of `identify` against the whole existing library is done
 manually (not via cron) so any `unresolved` results can be reviewed and
