@@ -1,0 +1,299 @@
+#!/bin/bash
+# Sorts a tree of TV episode video files into a season-organized show folder.
+#
+# Usage: ./convert_season <source_tree> <show_name>
+#
+# For a source tree containing files whose names embed SxxEyy somewhere
+# (e.g. "Ted.Lasso.S03E01.Hello.mkv"), this:
+#   1. Renames each matching file in place to SxxEyy.<ext>
+#   2. Batch-converts them all via convert_video, using <show_name> as the
+#      genre (so output lands in /mnt/HDD/films/<show_name>/)
+#   3. Sorts the resulting files into "Season N" subfolders under that show
+#      folder, creating only the ones that don't already exist
+#
+# Subtitle decisions (whether to include forced English subtitles) are
+# classified per file via `convert_video --analyze-subs` *before* any
+# conversion happens (cheap: no encoding), so a full transcode is never
+# wasted finding out a file needed different handling than assumed.
+
+set -o pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONVERT_VIDEO="$SCRIPT_DIR/convert_video"
+FORCED_SUB_COVERAGE_THRESHOLD=15
+# Where convert_video actually writes its output (mirrors its own hardcoded
+# /mnt/HDD/films/<genre> convention). Overridable so tests can point it at a
+# scratch directory instead of the real media library.
+FILMS_BASE_DIR="/mnt/HDD/films"
+
+# --- extract_episode_tag ---------------------------------------------------
+# Finds an SxxEyy-style episode marker anywhere in a filename (case
+# insensitive, 1-2 digit season/episode numbers) and returns it normalized
+# to zero-padded "S01E01" form. Prints nothing if no such marker is found.
+extract_episode_tag() {
+    local name="$1"
+    local upper
+    upper=$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')
+
+    if [[ "$upper" =~ S([0-9]{1,2})E([0-9]{1,2}) ]]; then
+        printf 'S%02dE%02d\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    fi
+}
+
+# --- find_video_files -------------------------------------------------
+# Recursively lists video files (mkv/mp4/avi/m4v, case-insensitive) under
+# a directory tree, one path per line.
+find_video_files() {
+    local root="$1"
+    find "$root" -type f \( \
+        -iname "*.mkv" -o -iname "*.mp4" -o -iname "*.avi" -o -iname "*.m4v" \
+    \)
+}
+
+# --- rename_to_tag ----------------------------------------------------
+# Renames a file in place (within its current directory) to "<tag>.<ext>",
+# with ext lowercased. Idempotent if already correctly named. If a
+# different file already occupies the target name in that directory,
+# leaves both files untouched, prints nothing to stdout, warns on stderr,
+# and returns 1 - this only catches same-directory collisions; duplicate
+# tags across different directories are a separate, tree-wide check.
+rename_to_tag() {
+    local filepath="$1" tag="$2"
+    local dir base ext new_path
+
+    dir=$(dirname "$filepath")
+    base=$(basename "$filepath")
+    ext="${base##*.}"
+    ext=$(printf '%s' "$ext" | tr '[:upper:]' '[:lower:]')
+    new_path="$dir/$tag.$ext"
+
+    if [[ "$filepath" == "$new_path" ]]; then
+        printf '%s\n' "$new_path"
+        return 0
+    fi
+
+    if [[ -e "$new_path" ]]; then
+        echo "rename_to_tag: collision, $new_path already exists (leaving $filepath alone)" >&2
+        return 1
+    fi
+
+    mv "$filepath" "$new_path" || return 1
+    printf '%s\n' "$new_path"
+}
+
+# --- find_video_files_with_tags ----------------------------------------
+# Like find_video_files, but prints "TAG\tPATH" per line (TAG empty when
+# the filename has no SxxEyy marker).
+find_video_files_with_tags() {
+    local root="$1" file tag
+    while IFS= read -r file; do
+        tag=$(extract_episode_tag "$(basename "$file")")
+        printf '%s\t%s\n' "$tag" "$file"
+    done < <(find_video_files "$root")
+}
+
+# --- duplicate_tags_from_list --------------------------------------------
+# Reads "TAG\tPATH" lines on stdin and prints (sorted) any TAG that is used
+# by more than one file - these would collide at the final destination
+# filename regardless of which source directory they came from, so they
+# must be caught before conversion rather than left to silently overwrite
+# each other's output.
+duplicate_tags_from_list() {
+    awk -F'\t' '$1 != "" { count[$1]++ } END { for (t in count) if (count[t] > 1) print t }' | sort
+}
+
+# --- profile_bucket ------------------------------------------------------
+# Classifies the "COVERAGE=x FORCED=y EXTERNAL_SRT=z" output of
+# `convert_video --analyze-subs` into one of the buckets convert_video's own
+# subtitle logic would actually treat differently:
+#   NONE          - nothing to include, never prompts
+#   HIGH          - forced English subs, coverage >= threshold: auto-included
+#                   without prompting
+#   LOW           - forced English subs, coverage < threshold: convert_video
+#                   would prompt interactively
+#   EXTERNAL_SRT  - no forced subs, but a sidecar .srt exists: convert_video
+#                   would prompt interactively (and --forced can't attach it
+#                   non-interactively - see convert_video's own comment)
+# Two files sharing a bucket can safely be given the same non-interactive
+# treatment; different buckets cannot.
+profile_bucket() {
+    local analyze_output="$1"
+    local forced external coverage
+
+    forced=$(echo "$analyze_output" | grep -oE 'FORCED=[0-9]+' | cut -d= -f2)
+    external=$(echo "$analyze_output" | grep -oE 'EXTERNAL_SRT=[0-9]+' | cut -d= -f2)
+    coverage=$(echo "$analyze_output" | grep -oE 'COVERAGE=[0-9.]+' | cut -d= -f2)
+
+    if [[ "$forced" == "1" ]]; then
+        if awk -v c="${coverage:-0}" -v t="$FORCED_SUB_COVERAGE_THRESHOLD" 'BEGIN { exit !(c >= t) }'; then
+            echo "HIGH"
+        else
+            echo "LOW"
+        fi
+    elif [[ "$external" == "1" ]]; then
+        echo "EXTERNAL_SRT"
+    else
+        echo "NONE"
+    fi
+}
+
+# --- classify_profile ------------------------------------------------------
+# Runs convert_video --analyze-subs on a file (no encoding) and buckets the
+# result via profile_bucket.
+classify_profile() {
+    local file="$1"
+    profile_bucket "$("$CONVERT_VIDEO" --analyze-subs "$file" 2>/dev/null)"
+}
+
+# --- organize_into_seasons --------------------------------------------
+# Scans the top level of a destination directory (not just files from this
+# run - catches any stray episodes already sitting there) for S##E##*
+# files, works out which "Season N" subfolders already exist vs need
+# creating, creates the missing ones, and moves each file into place.
+organize_into_seasons() {
+    local dest_dir="$1" file base season_num
+
+    while IFS= read -r file; do
+        [[ -e "$file" ]] || continue
+        base=$(basename "$file")
+        season_num=$(printf '%s' "$base" | grep -oE '^S[0-9]{2}' | sed 's/^S//')
+        season_num=$((10#$season_num))
+
+        mkdir -p "$dest_dir/Season $season_num"
+        mv "$file" "$dest_dir/Season $season_num/"
+    done < <(find "$dest_dir" -maxdepth 1 -type f -name "S[0-9][0-9]E[0-9][0-9]*")
+}
+
+# --- main -----------------------------------------------------------------
+main() {
+    local source_tree="$1" show_name="$2"
+
+    local list_file; list_file=$(mktemp)
+    find_video_files_with_tags "$source_tree" > "$list_file"
+
+    local dup_tags; dup_tags=$(duplicate_tags_from_list < "$list_file")
+
+    local to_process=() skipped_no_match=() skipped_reported=()
+    local tag path
+    while IFS=$'\t' read -r tag path; do
+        if [[ -z "$tag" ]]; then
+            skipped_no_match+=("$path")
+        elif printf '%s\n' "$dup_tags" | grep -qxF "$tag"; then
+            skipped_reported+=("$tag: $path (duplicate episode tag elsewhere in the source tree)")
+        else
+            to_process+=("$tag"$'\t'"$path")
+        fi
+    done < "$list_file"
+    rm -f "$list_file"
+
+    if [[ ${#skipped_no_match[@]} -gt 0 ]]; then
+        echo "Skipped (no SxxEyy pattern found in filename):"
+        printf '  %s\n' "${skipped_no_match[@]}"
+    fi
+
+    # Rename. A rename collision (same directory, different file already at
+    # the target name) is reported the same way as a cross-tree duplicate.
+    local renamed=() entry new_path
+    for entry in "${to_process[@]}"; do
+        tag="${entry%%$'\t'*}"
+        path="${entry#*$'\t'}"
+        if new_path=$(rename_to_tag "$path" "$tag" 2>/dev/null); then
+            renamed+=("$tag"$'\t'"$new_path")
+        else
+            skipped_reported+=("$tag: $path (rename collision in its own directory)")
+        fi
+    done
+
+    if [[ ${#skipped_reported[@]} -gt 0 ]]; then
+        echo "Skipped (needs manual attention):"
+        printf '  %s\n' "${skipped_reported[@]}"
+    fi
+
+    if [[ ${#renamed[@]} -eq 0 ]]; then
+        echo "No files to convert."
+        return 0
+    fi
+
+    # Classify every renamed file's subtitle profile before converting
+    # anything, so an anomaly is caught before paying for an encode rather
+    # than after.
+    local classified=() bucket_list=() bucket
+    for entry in "${renamed[@]}"; do
+        new_path="${entry#*$'\t'}"
+        bucket=$(classify_profile "$new_path")
+        classified+=("$entry"$'\t'"$bucket")
+        bucket_list+=("$bucket")
+    done
+
+    local majority
+    majority=$(printf '%s\n' "${bucket_list[@]}" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
+    echo "Season subtitle profile: baseline = $majority"
+
+    # For an ambiguous baseline (would otherwise make convert_video prompt
+    # per file), ask once and apply the same answer to every file sharing
+    # that bucket, by piping it to convert_video's own interactive prompt.
+    local piped_answer="" ans
+    case "$majority" in
+        LOW)
+            read -r -p "Low-coverage forced English subtitles detected across this season - include them? [Y/n] " ans
+            [[ "$ans" =~ ^[Nn] ]] && piped_answer="n" || piped_answer="y"
+            ;;
+        EXTERNAL_SRT)
+            read -r -p "External subtitle file(s) found across this season - include them? [y/N] " ans
+            [[ "$ans" =~ ^[Yy] ]] && piped_answer="y" || piped_answer="n"
+            ;;
+    esac
+
+    local to_convert=() anomalies=() rest
+    for entry in "${classified[@]}"; do
+        tag="${entry%%$'\t'*}"
+        rest="${entry#*$'\t'}"
+        new_path="${rest%%$'\t'*}"
+        bucket="${rest#*$'\t'}"
+        if [[ "$bucket" == "$majority" ]]; then
+            to_convert+=("$tag"$'\t'"$new_path")
+        else
+            anomalies+=("$tag: $new_path (profile: $bucket, season baseline: $majority)")
+        fi
+    done
+
+    if [[ ${#anomalies[@]} -gt 0 ]]; then
+        echo "Anomalies (subtitle profile differs from the season baseline - left unconverted for manual review):"
+        printf '  %s\n' "${anomalies[@]}"
+    fi
+
+    local converted=() failed=()
+    for entry in "${to_convert[@]}"; do
+        tag="${entry%%$'\t'*}"
+        new_path="${entry#*$'\t'}"
+        if [[ -n "$piped_answer" ]]; then
+            if printf '%s\n' "$piped_answer" | "$CONVERT_VIDEO" "$new_path" "$show_name"; then
+                converted+=("$tag")
+            else
+                failed+=("$tag: $new_path")
+            fi
+        else
+            if "$CONVERT_VIDEO" "$new_path" "$show_name" </dev/null; then
+                converted+=("$tag")
+            else
+                failed+=("$tag: $new_path")
+            fi
+        fi
+    done
+
+    echo "Converted: ${#converted[@]}, Failed: ${#failed[@]}"
+    if [[ ${#failed[@]} -gt 0 ]]; then
+        printf '  FAILED: %s\n' "${failed[@]}"
+    fi
+
+    organize_into_seasons "$FILMS_BASE_DIR/$show_name"
+    echo "Done."
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    if [[ $# -ne 2 ]]; then
+        echo "Usage: $0 <source_tree> <show_name>" >&2
+        exit 1
+    fi
+    main "$1" "$2"
+fi
