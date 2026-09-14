@@ -297,6 +297,12 @@ main() {
             bucket_list+=("$bucket")
         done
 
+        # `sort -rn` on "count bucket" lines is stable, so a tie in count is
+        # broken by `sort`'s prior alphabetical ordering of bucket names
+        # (EXTERNAL_SRT < HIGH < LOW < NONE) - deterministic (same input
+        # always picks the same bucket) but not a principled preference
+        # between tied buckets; not expected to matter in practice since a
+        # real season overwhelmingly leans one way or the other.
         local majority
         majority=$(printf '%s\n' "${bucket_list[@]}" | sort | uniq -c | sort -rn | head -1 | awk '{print $2}')
         echo "Season subtitle profile: baseline = $majority"
