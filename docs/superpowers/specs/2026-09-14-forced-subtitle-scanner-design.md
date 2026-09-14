@@ -252,9 +252,17 @@ anonymous tier and is required for `/download`).
 ## Deployment
 
 Runs on the Pi (not the Mac) via SSH/cron, matching `convert_video`/
-`films_backup` conventions: logs under `/home/pi/logs`, `--quiet` for cron,
-a new daily cron entry for `forced_subs apply --quiet` in `crontab.txt`
-(and `fresh_install.sh` updated per its existing pattern for new services).
+`films_backup` conventions: logs/cache under `/home/pi/logs`, `--quiet`
+for cron, new cron entries in `crontab.txt` (and `fresh_install.sh`
+updated per its existing pattern for new services):
+- `forced_subs identify --quiet` — weekly (new films arrive rarely; this
+  just needs to pick up whatever's been added since last time — already-
+  cached files are skipped).
+- `forced_subs apply --quiet` — daily, per the rate-limited design above.
+
+Initial run of `identify` against the whole existing library is done
+manually (not via cron) so any `unresolved` results can be reviewed and
+fixed with `--set` before `apply` starts relying on the cache.
 
 ## Testing
 
