@@ -57,10 +57,10 @@ don't. This adds a script to:
   - title: "Moana"
     aliases: []
     year: 2026
-    imdb_id: "TBD"
+    imdb_id: "tt0000000"  # filled in for real during implementation
     editions:
       - name: theatrical
-        runtime_minutes: TBD
+        runtime_minutes: 0  # filled in for real during implementation
   ```
   Seeded initially with franchises I'm confident about (Star Wars saga,
   LOTR trilogy, and similar — to be filled in during implementation).
