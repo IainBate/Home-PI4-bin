@@ -39,24 +39,26 @@ touch "$TREE/ShowA/other.txt"
 touch "$TREE/ShowA/notes.srt"
 touch "$TREE/random.avi"
 touch "$TREE/deep/nested/dir/clip.m4v"
+touch "$TREE/deep/nested/dir/"$'weird\nname.mkv'   # embedded newline in the filename
 
 found=()
-while IFS= read -r line; do
-    found+=("$line")
-done < <(find_video_files "$TREE" | sort)
+while IFS= read -r -d '' entry; do
+    found+=("$entry")
+done < <(find_video_files "$TREE" | sort -z)
 
 expected=(
     "$TREE/ShowA/Season1/A.S01E01.mkv"
     "$TREE/ShowA/Season1/A.S01E02.MP4"
     "$TREE/deep/nested/dir/clip.m4v"
+    "$TREE/deep/nested/dir/"$'weird\nname.mkv'
     "$TREE/random.avi"
 )
 expected_sorted=()
-while IFS= read -r line; do
-    expected_sorted+=("$line")
-done < <(printf '%s\n' "${expected[@]}" | sort)
+while IFS= read -r -d '' entry; do
+    expected_sorted+=("$entry")
+done < <(printf '%s\0' "${expected[@]}" | sort -z)
 
-assert_eq "finds exactly the video files (count)" "${#expected_sorted[@]}" "${#found[@]}"
+assert_eq "finds exactly the video files, including one with a newline in its name (count)" "${#expected_sorted[@]}" "${#found[@]}"
 assert_eq "found list matches expected list" "${expected_sorted[*]}" "${found[*]}"
 
 # --- rename_to_tag ---------------------------------------------------------
