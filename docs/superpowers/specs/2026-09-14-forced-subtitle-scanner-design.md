@@ -168,6 +168,32 @@ don't. This adds a script to:
 - Every attempt (success/fail/unavailable) is logged to
   `/home/pi/logs/forced_subs_apply_logfile`.
 
+## Reporting
+
+A third subcommand, **`forced_subs report`**, produces the human-facing
+summary — the thing you actually read, as opposed to the append-only logs
+`scan`/`apply` write for their own bookkeeping. It combines a fresh `scan`
+with the cumulative contents of `forced_subs_apply_logfile` and prints
+three clearly separated sections:
+
+1. **Already fine** — had forced subs before this project touched
+   anything (`HAS_FORCED`, and not present in the apply log's success
+   entries). Just a count by default; full list with `--verbose`.
+2. **Added by this script** — every file `apply` has successfully
+   remuxed, ever (from the apply log's success entries), so you can see
+   what changed without diffing the filesystem yourself.
+3. **You'll need to sort these out yourself** — everything still missing
+   forced subs after the above: `NEEDS_FORCED_KNOWN` entries that stayed
+   unresolved (unavailable/ambiguous after search) plus every
+   `NEEDS_FORCED_UNKNOWN` entry (title not on the curated list at all).
+   Each line says why (`no_match_found`, `ambiguous_title_multiple_years`,
+   `not_on_known_list`, etc.) so it's clear whether the fix is "add this
+   title to the curated list" or "no forced-sub release exists on
+   OpenSubtitles for this one — find/download manually."
+
+This is the output you'd actually run and read after a batch of daily
+`apply` runs has had time to work through the backlog.
+
 ## Subtitle source
 
 OpenSubtitles.com REST API only. It's the sole major subtitle site with an
