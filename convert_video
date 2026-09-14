@@ -121,7 +121,7 @@ analyze_subtitles() {
 
             for sub_stream in "${FORCED_ENG_SUBS[@]}"; do
                 # Extract stream index from line like "Stream #0:2(eng): Subtitle..."
-                STREAM_IDX=$(echo "$sub_stream" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                STREAM_IDX=$(echo "$sub_stream" | sed -nE 's|.*Stream #0:([0-9]+).*|\1|p')
 
                 if [[ -n "$STREAM_IDX" ]]; then
                     # Get subtitle packet times for this stream. STREAM_IDX is
@@ -402,7 +402,7 @@ elif [ "$FORCED_SUBS" = "true" ]; then
         # Find first English forced subtitle stream
         for sub_line in "${ALL_SUB_STREAMS[@]}"; do
             if check_english_forced_sub "$sub_line"; then
-                STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                STREAM_IDX=$(echo "$sub_line" | sed -nE 's|.*Stream #0:([0-9]+).*|\1|p')
                 if [[ -n "$STREAM_IDX" ]]; then
                     FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
                     SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
@@ -417,7 +417,7 @@ elif [ "$FORCED_SUBS" = "true" ]; then
             # Try any English subtitle as fallback
             for sub_line in "${ALL_SUB_STREAMS[@]}"; do
                 if echo "$sub_line" | grep -q "eng"; then
-                    STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                    STREAM_IDX=$(echo "$sub_line" | sed -nE 's|.*Stream #0:([0-9]+).*|\1|p')
                     if [[ -n "$STREAM_IDX" ]]; then
                         FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
                         SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
@@ -464,7 +464,7 @@ else
         if [ "$INCLUDE_SUBTITLES" = true ]; then
             for sub_line in "${ALL_SUB_STREAMS[@]}"; do
                 if check_english_forced_sub "$sub_line"; then
-                    STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                    STREAM_IDX=$(echo "$sub_line" | sed -nE 's|.*Stream #0:([0-9]+).*|\1|p')
                     if [[ -n "$STREAM_IDX" ]]; then
                         FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
                         SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
@@ -478,7 +478,7 @@ else
             if [[ -z "$FORCED_SUB_MAP" ]]; then
                 for sub_line in "${ALL_SUB_STREAMS[@]}"; do
                     if echo "$sub_line" | grep -q "eng"; then
-                        STREAM_IDX=$(echo "$sub_line" | sed -n 's/.*Stream #0:\([0-9]\+\).*/\1/p')
+                        STREAM_IDX=$(echo "$sub_line" | sed -nE 's|.*Stream #0:([0-9]+).*|\1|p')
                         if [[ -n "$STREAM_IDX" ]]; then
                             FORCED_SUB_MAP="-map 0:s:$STREAM_IDX"
                             SUBTITLE_CODEC="-c:s mov_text -metadata:s:s:0 language=eng"
