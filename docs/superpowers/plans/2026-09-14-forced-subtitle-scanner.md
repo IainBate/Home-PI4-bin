@@ -1484,7 +1484,10 @@ cmd_scan() {
                 fi
             fi
         fi
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$bucket" "$file" "$imdb_id" "$title" "$edition" "${coverage:-0}" "${external:-0}" "$reason"
+        local result_line
+        result_line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$bucket" "$file" "$imdb_id" "$title" "$edition" "${coverage:-0}" "${external:-0}" "$reason")
+        scan_cache_set "$file" "$sig" "$result_line"
+        printf '%s\n' "$result_line"
     done < <(walk_films "$FILMS_ROOT")
 }
 ```
