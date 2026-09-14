@@ -1373,6 +1373,17 @@ assert_contains "reason is not_on_known_list" "$line" "not_on_known_list"
 echo "== scan also appends to SCAN_LOG =="
 assert_file_exists "scan log was written" "$SCAN_LOG"
 
+echo "== incremental: an unchanged HAS_FORCED file is replayed from cache, not re-probed =="
+export SCAN_CACHE="$WORK/scan_cache"
+"$FORCED_SUBS" scan >/dev/null  # populate the cache
+mv "$REPO_ROOT/convert_video" "$REPO_ROOT/convert_video.disabled"
+restore_convert_video() { mv "$REPO_ROOT/convert_video.disabled" "$REPO_ROOT/convert_video" 2>/dev/null || true; }
+trap restore_convert_video EXIT
+out2=$("$FORCED_SUBS" scan 2>&1)
+restore_convert_video
+trap - EXIT
+assert_contains "HAS_FORCED file still reported correctly with convert_video unavailable" "$out2" "$(printf 'HAS_FORCED\t%s/films/Star Wars/has_forced.mkv' "$WORK")"
+
 test_summary_and_exit
 ```
 
