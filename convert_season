@@ -190,10 +190,11 @@ season_number_from_tag() {
 # the same (probably grown) source tree, rather than silently redoing and
 # overwriting it.
 episode_already_converted() {
-    local show_name="$1" tag="$2" season
+    local show_name="$1" tag="$2" season dest_path
+    dest_path=$(show_dest_path "$show_name")
     season=$(season_number_from_tag "$tag")
-    [[ -e "$FILMS_BASE_DIR/$show_name/Season $season/$tag.mp4" ]] && return 0
-    [[ -e "$FILMS_BASE_DIR/$show_name/$tag.mp4" ]] && return 0
+    [[ -e "$FILMS_BASE_DIR/$dest_path/Season $season/$tag.mp4" ]] && return 0
+    [[ -e "$FILMS_BASE_DIR/$dest_path/$tag.mp4" ]] && return 0
     return 1
 }
 
