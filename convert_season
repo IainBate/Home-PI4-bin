@@ -145,6 +145,30 @@ classify_profile() {
     profile_bucket "$("$CONVERT_VIDEO" --analyze-subs "$file" 2>/dev/null)"
 }
 
+# --- season_number_from_tag ---------------------------------------------
+# "S02E01" -> "2" (leading zero stripped, for use in a "Season N" folder
+# name). Shared by organize_into_seasons and episode_already_converted so
+# the two agree on what folder a given episode belongs in.
+season_number_from_tag() {
+    local tag="$1"
+    echo $((10#${tag:1:2}))
+}
+
+# --- episode_already_converted -------------------------------------------
+# True if <show_name>/<tag>.mp4 already exists under FILMS_BASE_DIR, either
+# already organized into its Season N folder (from a previous run) or still
+# sitting at the top level (converted but not yet organized). Lets main()
+# skip re-encoding a file that was already handled by an earlier run over
+# the same (probably grown) source tree, rather than silently redoing and
+# overwriting it.
+episode_already_converted() {
+    local show_name="$1" tag="$2" season
+    season=$(season_number_from_tag "$tag")
+    [[ -e "$FILMS_BASE_DIR/$show_name/Season $season/$tag.mp4" ]] && return 0
+    [[ -e "$FILMS_BASE_DIR/$show_name/$tag.mp4" ]] && return 0
+    return 1
+}
+
 # --- organize_into_seasons --------------------------------------------
 # Scans the top level of a destination directory (not just files from this
 # run - catches any stray episodes already sitting there) for S##E##*
