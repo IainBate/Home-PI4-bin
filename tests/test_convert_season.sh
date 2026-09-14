@@ -206,10 +206,15 @@ if [[ "\$1" == "--analyze-subs" ]]; then
     grep -F "\$2	" "$2" | cut -f2-
     exit 0
 fi
+no_subs="no"
+if [[ "\$1" == "--no-subs" ]]; then
+    no_subs="yes"
+    shift
+fi
 file="\$1"; genre="\$2"
 answer=""
 if [ ! -t 0 ]; then read -r answer; fi
-echo "CONVERT file=\$file genre=\$genre stdin=\$answer" >> "$1/log"
+echo "CONVERT file=\$file genre=\$genre no_subs=\$no_subs stdin=\$answer" >> "$1/log"
 if grep -qxF "\$file" "$3" 2>/dev/null; then
     exit 1
 fi
