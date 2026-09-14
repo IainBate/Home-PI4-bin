@@ -132,9 +132,38 @@ assert_eq "forced, coverage < 15 -> LOW" "LOW" "$(profile_bucket 'COVERAGE=4.9 F
 echo "== classify_profile =="
 
 CPDIR="$(mktemp -d)"
-ffmpeg -y -f lavfi -i testsrc=duration=2:size=160x90:rate=5 -f lavfi -i sine=duration=2 \
-    -pix_fmt yuv420p -map 0:v -map 1:a -c:v libx264 -c:a aac "$CPDIR/no_subs.mkv" -hide_banner -loglevel error
-assert_eq "classify_profile on a plain file with no subs" "NONE" "$(classify_profile "$CPDIR/no_subs.mkv")"
+mkdir -p "$CPDIR/none" "$CPDIR/high" "$CPDIR/low" "$CPDIR/ext"
+
+ffmpeg -y -f lavfi -i testsrc=duration=10:size=160x90:rate=5 -f lavfi -i sine=duration=10 \
+    -pix_fmt yuv420p -map 0:v -map 1:a -c:v libx264 -c:a aac "$CPDIR/base.mkv" -hide_banner -loglevel error
+
+cat > "$CPDIR/high.srt" <<'EOF'
+1
+00:00:00,000 --> 00:00:05,000
+Hola
+EOF
+cat > "$CPDIR/low.srt" <<'EOF'
+1
+00:00:00,000 --> 00:00:00,500
+Hola
+EOF
+
+ffmpeg -y -i "$CPDIR/base.mkv" -map 0:v -map 0:a -c copy "$CPDIR/none/none.mkv" -hide_banner -loglevel error
+
+ffmpeg -y -i "$CPDIR/base.mkv" -i "$CPDIR/high.srt" -map 0:v -map 0:a -map 1:s -c:v copy -c:a copy -c:s srt \
+    -metadata:s:s:0 language=eng -disposition:s:0 forced "$CPDIR/high/high.mkv" -hide_banner -loglevel error
+
+ffmpeg -y -i "$CPDIR/base.mkv" -i "$CPDIR/low.srt" -map 0:v -map 0:a -map 1:s -c:v copy -c:a copy -c:s srt \
+    -metadata:s:s:0 language=eng -disposition:s:0 forced "$CPDIR/low/low.mkv" -hide_banner -loglevel error
+
+ffmpeg -y -i "$CPDIR/base.mkv" -map 0:v -map 0:a -c copy "$CPDIR/ext/ext.mkv" -hide_banner -loglevel error
+cp "$CPDIR/high.srt" "$CPDIR/ext/ext.srt"
+
+assert_eq "classify_profile on a plain file with no subs" "NONE" "$(classify_profile "$CPDIR/none/none.mkv")"
+assert_eq "classify_profile on a high-coverage forced-subtitle file" "HIGH" "$(classify_profile "$CPDIR/high/high.mkv")"
+assert_eq "classify_profile on a low-coverage forced-subtitle file" "LOW" "$(classify_profile "$CPDIR/low/low.mkv")"
+assert_eq "classify_profile on a file with only an external srt sidecar" "EXTERNAL_SRT" "$(classify_profile "$CPDIR/ext/ext.mkv")"
+
 rm -rf "$CPDIR"
 
 # --- organize_into_seasons --------------------------------------------------
