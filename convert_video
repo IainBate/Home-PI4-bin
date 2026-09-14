@@ -23,6 +23,7 @@
 #   -a, --audio <id>  Specify audio stream index (default: 0)
 #   -h, --hard_sub    Hard encode all subtitles
 #   --forced          Include only forced English subtitles without prompting
+#   --no-subs         Skip subtitle analysis entirely (no subtitles wanted)
 #   -c, --colon       Replace dashes with colons in filename and metadata
 #   --olympus         Olympus .MOV batch mode (date-based naming, libx264)
 
