@@ -371,7 +371,7 @@ git commit -m "Add encrypted secrets.yaml.enc backup"
 - Test: `tests/test_forced_subs_common.sh`
 
 **Interfaces:**
-- Produces: `walk_films <root>` (prints one video file path per line, prunes `Our Family`), `normalize_title_from_path <path>` (prints a cleaned title guess), `extract_year_from_name <name>` (prints a 4-digit year or nothing), `imdb_tt_to_numeric <tt_id>` (prints digits only), `yaml_get_2level <file> <top_key> <sub_key>` (prints the value or nothing), `fid_cache_get_field <path> <field>` (field ∈ imdb_id/title/year/confidence/reason/last_checked; exits 1 if no row), `fid_cache_set <path> <imdb_id> <title> <year> <confidence> <reason> <checked>`.
+- Produces: `walk_films <root>` (prints one video file path per line, prunes `Our Family`), `normalize_title_from_path <path>` (prints a cleaned title guess), `extract_year_from_name <name>` (prints a 4-digit year or nothing), `imdb_tt_to_numeric <tt_id>` (prints digits only), `yaml_get_2level <file> <top_key> <sub_key>` (prints the value or nothing), `fid_cache_get_field <path> <field>` (field ∈ imdb_id/title/year/confidence/reason/last_checked; exits 1 if no row), `fid_cache_set <path> <imdb_id> <title> <year> <confidence> <reason> <checked>`, `file_stat_signature <path>` (prints `<size>:<mtime_epoch>`, portable across GNU/BSD `stat` — used by Task 7's scan cache to detect whether a file has changed since it was last checked).
 - Consumes: env var `FID_CACHE` (path to the identity cache TSV; tests override it).
 
 - [ ] **Step 1: Write the failing test**
