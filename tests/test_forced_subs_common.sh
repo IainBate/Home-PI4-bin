@@ -28,6 +28,14 @@ echo "== normalize_title_from_path strips tags but the caller controls year hand
 title=$(normalize_title_from_path "$WORK/films/Star Wars/Phantom.Menace.1080p.BluRay.x264.mp4")
 assert_eq "strips extension/dots/quality/codec tags" "Phantom Menace" "$title"
 
+# Regression test: tags preceded by non-space punctuation (like hyphen in scene releases) must be stripped, not skipped
+title=$(normalize_title_from_path "$WORK/films/Star Wars/Movie.Title.x264-GROUP.mkv")
+assert_eq "strips tags glued to scene group names (x264-GROUP pattern)" "Movie Title GROUP" "$title"
+
+# Regression test: digit-suffixed near-misses must not be mangled (e.g., DTS5.1)
+title=$(normalize_title_from_path "$WORK/films/Star Wars/Movie.DTS5.1.mkv")
+assert_eq "does not strip tag prefixes of longer tokens (DTS vs DTS5)" "Movie DTS5 1" "$title"
+
 echo "== imdb_tt_to_numeric =="
 assert_eq "strips tt and leading zeros" "120915" "$(imdb_tt_to_numeric "tt0120915")"
 
