@@ -1842,6 +1842,10 @@ assert_contains "Phantom Menace listed as added" "$out" "Phantom Menace.mp4"
 echo "== the unmatched obscure film appears under manual attention =="
 assert_contains "Unmatched Obscure Film listed for manual attention" "$out" "Unmatched Obscure Film"
 
+echo "== the report is also written into the films root itself =="
+assert_file_exists "report file written to the films root" "$WORK/films/_FORCED_SUBTITLES_REPORT.txt"
+assert_eq "file content matches what was printed to stdout" "$out" "$(cat "$WORK/films/_FORCED_SUBTITLES_REPORT.txt")"
+
 test_summary_and_exit
 ```
 
@@ -1857,7 +1861,7 @@ Insert after `cmd_apply` (before `# --- dispatch ---`):
 ```bash
 # --- report -----------------------------------------------------------
 
-cmd_report() {
+report_body() {
     local verbose="$1"
     local scan_output
     scan_output=$(cmd_scan)
