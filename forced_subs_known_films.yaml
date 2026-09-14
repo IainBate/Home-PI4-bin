@@ -1,0 +1,51 @@
+films:
+  - title: "Star Wars: Episode I - The Phantom Menace"
+    aliases: "Phantom Menace|Episode I"
+    year: 1999
+    imdb_id: "tt0120915"
+    editions: "theatrical:133,2011_bluray:136"
+  - title: "Star Wars: Episode II - Attack of the Clones"
+    aliases: "Attack of the Clones|Episode II"
+    year: 2002
+    imdb_id: "tt0121765"
+    editions: "theatrical:142"
+  - title: "Star Wars: Episode III - Revenge of the Sith"
+    aliases: "Revenge of the Sith|Episode III"
+    year: 2005
+    imdb_id: "tt0121766"
+    editions: "theatrical:140"
+  - title: "Star Wars: Episode IV - A New Hope"
+    aliases: "A New Hope|Episode IV|Star Wars"
+    year: 1977
+    imdb_id: "tt0076759"
+    editions: "theatrical:121"
+  - title: "Star Wars: Episode V - The Empire Strikes Back"
+    aliases: "The Empire Strikes Back|Empire Strikes Back|Episode V"
+    year: 1980
+    imdb_id: "tt0080684"
+    editions: "theatrical:124"
+  - title: "Star Wars: Episode VI - Return of the Jedi"
+    aliases: "Return of the Jedi|Episode VI"
+    year: 1983
+    imdb_id: "tt0086190"
+    editions: "theatrical:131"
+  - title: "The Lord of the Rings: The Fellowship of the Ring"
+    aliases: "Fellowship of the Ring"
+    year: 2001
+    imdb_id: "tt0120737"
+    editions: "theatrical:178,extended:228"
+  - title: "The Lord of the Rings: The Two Towers"
+    aliases: "The Two Towers"
+    year: 2002
+    imdb_id: "tt0167261"
+    editions: "theatrical:179,extended:235"
+  - title: "The Lord of the Rings: The Return of the King"
+    aliases: "The Return of the King"
+    year: 2003
+    imdb_id: "tt0167260"
+    editions: "theatrical:201,extended:263"
+  - title: "Moana"
+    aliases: ""
+    year: 2016
+    imdb_id: "tt3521164"
+    editions: "theatrical:107"
