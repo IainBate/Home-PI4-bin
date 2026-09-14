@@ -278,6 +278,11 @@ if [ "$HARD_SUB" = "true" ] && [ "$FORCED_SUBS" = "true" ]; then
     exit 1
 fi
 
+if [ "$NO_SUBS" = "true" ] && { [ "$HARD_SUB" = "true" ] || [ "$FORCED_SUBS" = "true" ]; }; then
+    echo "Error: Cannot use --no-subs together with -h/--hard_sub or --forced"
+    exit 1
+fi
+
 # --- Olympus Mode Processing ---
 if [ "$OLYMPUS_MODE" = "true" ]; then
     echo "Processing Olympus .MOV files in directory: $dirname"
