@@ -345,7 +345,17 @@ main() {
         for entry in "${to_convert[@]}"; do
             tag="${entry%%$'\t'*}"
             new_path="${entry#*$'\t'}"
-            if [[ -n "$piped_answer" ]]; then
+            if [[ "$majority" == "NONE" ]]; then
+                # Already known (from the classification pre-pass) that
+                # there's nothing to consider - skip convert_video's own
+                # subtitle probe entirely rather than have it redundantly
+                # re-run the same analysis this run already did.
+                if "$CONVERT_VIDEO" --no-subs "$new_path" "$show_name" </dev/null; then
+                    converted+=("$tag")
+                else
+                    failed+=("$tag: $new_path")
+                fi
+            elif [[ -n "$piped_answer" ]]; then
                 if printf '%s\n' "$piped_answer" | "$CONVERT_VIDEO" "$new_path" "$show_name"; then
                     converted+=("$tag")
                 else
