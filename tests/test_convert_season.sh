@@ -294,8 +294,8 @@ FILMS_BASE_DIR="$LDEST_DIR"
 main "$LTREE" "ShowY" <<< "n" >/dev/null 2>&1
 
 log_content="$(cat "$LSTUB_DIR/log")"
-assert_contains "e1 conversion piped the 'n' decision" "$log_content" "file=$LTREE/e1/S01E01.mkv genre=ShowY stdin=n"
-assert_contains "e2 conversion piped the same 'n' decision" "$log_content" "file=$LTREE/e2/S01E02.mkv genre=ShowY stdin=n"
+assert_contains "e1 conversion piped the 'n' decision" "$log_content" "file=$LTREE/e1/S01E01.mkv genre=ShowY no_subs=no stdin=n"
+assert_contains "e2 conversion piped the same 'n' decision" "$log_content" "file=$LTREE/e2/S01E02.mkv genre=ShowY no_subs=no stdin=n"
 line_count=$(wc -l < "$LSTUB_DIR/log" | tr -d ' ')
 assert_eq "both files converted with the single decision" "2" "$line_count"
 
