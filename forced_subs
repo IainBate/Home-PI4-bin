@@ -383,6 +383,12 @@ main() {
                 cmd_apply "$max"
             fi
             ;;
+        report)
+            load_opensubtitles_creds
+            local verbose=false
+            [ "${1:-}" = "--verbose" ] && verbose=true
+            cmd_report "$verbose"
+            ;;
         *)
             echo "Usage: forced_subs {identify|scan|apply|report} [options]" >&2
             exit 2
