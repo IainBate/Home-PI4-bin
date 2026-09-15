@@ -73,7 +73,7 @@ analyze=$("$REPO_ROOT/convert_video" --analyze-subs "$WORK/films/Star Wars/Phant
 assert_contains "FORCED=1 after apply" "$analyze" "FORCED=1"
 
 echo "== the unmatched file was left untouched and logged unavailable =="
-analyze2=$("$REPO_ROOT/convert_video" --analyze-subs "$WORK/films/Star Wars/No Subtitle Available Film.mp4")
+analyze2=$("$REPO_ROOT/convert_video" --analyze-subs "$WORK/films/Star Wars/No Subtitle Available Film.mkv")
 assert_contains "still FORCED=0 (untouched)" "$analyze2" "FORCED=0"
 assert_contains "logged as unavailable" "$(cat "$APPLY_LOG")" "unavailable"
 assert_file_exists "unavailable cache written" "$UNAVAILABLE_CACHE"
