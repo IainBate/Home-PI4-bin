@@ -315,23 +315,91 @@ log_apply() {
 cmd_apply() {
     local max_downloads="$1"
     local success_count=0
+    local consecutive_errors=0
     while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
         [ "$bucket" = "NEEDS_FORCED_KNOWN" ] || continue
         [ "$success_count" -lt "$max_downloads" ] || break
         unavailable_cache_is_fresh "$file" && continue
 
+        # A sidecar .srt is only trusted when it exists AND its own cue
+        # coverage is low (mirrors the 15% forced-vs-full-track threshold
+        # used elsewhere for embedded streams). Anything else (no matching
+        # sidecar, or a full-length dialogue track sitting next to the
+        # film) falls through to the normal search path below, exactly as
+        # if $external had been 0 all along.
         local srt_path=""
         if [ "$external" = "1" ]; then
-            srt_path=$(find_sidecar_srt "$file")
-        else
-            local hash result
-            hash=$(python3 "$LIBDIR/ost.py" hash "$file")
-            result=$(python3 "$LIBDIR/ost.py" find_forced_by_hash "$hash" 2>>"$APPLY_LOG" || true)
-            if [ -z "$result" ]; then
-                local imdb_numeric
-                imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
-                result=$(python3 "$LIBDIR/ost.py" find_forced_by_imdb "$imdb_numeric" 2>>"$APPLY_LOG" || true)
+            local candidate_srt
+            candidate_srt=$(find_sidecar_srt "$file")
+            if [ -n "$candidate_srt" ]; then
+                local video_duration coverage_pct
+                video_duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null)
+                coverage_pct=$(srt_coverage_percent "$candidate_srt" "$video_duration")
+                if awk -v c="$coverage_pct" 'BEGIN{exit !(c<15)}'; then
+                    srt_path="$candidate_srt"
+                fi
             fi
+        fi
+
+        if [ -z "$srt_path" ]; then
+            # ost.py's _request calls sys.exit(1) on any HTTP/network error
+            # and prints nothing on stdout in that case - a non-zero exit
+            # code reliably means "the call errored" (credentials/outage;
+            # NOT safe to cache as unavailable, it may well have a match),
+            # while exit 0 with empty stdout reliably means "no match
+            # found" (safe to cache). A run of 3 consecutive errors aborts
+            # early rather than burning through every remaining candidate.
+            local hash result hash_rc
+            hash=$(python3 "$LIBDIR/ost.py" hash "$file")
+            result=$(python3 "$LIBDIR/ost.py" find_forced_by_hash "$hash" 2>>"$APPLY_LOG")
+            hash_rc=$?
+            if [ "$hash_rc" -ne 0 ]; then
+                consecutive_errors=$((consecutive_errors + 1))
+                log_apply "$file" "error" "hash_search_failed"
+                if [ "$consecutive_errors" -ge 3 ]; then
+                    echo "ERROR: 3 consecutive OpenSubtitles API failures - aborting apply run early." >&2
+                    return 1
+                fi
+                continue
+            fi
+
+            if [ -z "$result" ]; then
+                # Bounded sanity check (spec: "sanity-checked against the
+                # matched edition's expected runtime... if still
+                # ambiguous, log as ambiguous") - the IMDb fallback has no
+                # release/runtime filtering at all, so for a film with
+                # multiple curated editions (e.g. theatrical vs extended)
+                # it could mux a wrong-runtime subtitle in permanently.
+                # Don't trust the unfiltered fallback for those; the
+                # hash-based path above stays usable since it's already
+                # edition-exact.
+                local lookup editions_str edition_count
+                lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
+                IFS=$'\t' read -r _ _ editions_str <<< "$lookup"
+                edition_count=$(printf '%s' "$editions_str" | tr ',' '\n' | grep -c .)
+                if [ "$edition_count" -gt 1 ]; then
+                    consecutive_errors=0
+                    unavailable_cache_set "$file" "ambiguous"
+                    log_apply "$file" "unavailable" "ambiguous"
+                    continue
+                fi
+
+                local imdb_numeric imdb_rc
+                imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
+                result=$(python3 "$LIBDIR/ost.py" find_forced_by_imdb "$imdb_numeric" 2>>"$APPLY_LOG")
+                imdb_rc=$?
+                if [ "$imdb_rc" -ne 0 ]; then
+                    consecutive_errors=$((consecutive_errors + 1))
+                    log_apply "$file" "error" "imdb_search_failed"
+                    if [ "$consecutive_errors" -ge 3 ]; then
+                        echo "ERROR: 3 consecutive OpenSubtitles API failures - aborting apply run early." >&2
+                        return 1
+                    fi
+                    continue
+                fi
+            fi
+            consecutive_errors=0
+
             if [ -z "$result" ]; then
                 unavailable_cache_set "$file" "no_match_found"
                 log_apply "$file" "unavailable" "no_match_found"
