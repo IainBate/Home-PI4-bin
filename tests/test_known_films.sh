@@ -96,4 +96,25 @@ result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Star W
 assert_eq "matches via the 'Star Wars' alias as whole words" \
     "tt0076759	Star Wars: Episode IV - A New Hope	1977" "$result"
 
+echo "== find_by_title_year: an exact full match beats a weaker partial match from a different film =="
+# "Solo - A Star Wars Story" contains the words "Star Wars" (Episode IV's
+# generic alias) as a partial/containment match, but it's also an exact
+# full-string match for Solo's own title - the exact match must win
+# outright, not tie with the weaker partial match and go ambiguous.
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Solo - A Star Wars Story" "")
+assert_eq "resolves to Solo, not an ambiguous tie with the Star Wars alias" \
+    "tt3778644	Solo: A Star Wars Story	2018" "$result"
+
+echo "== find_by_title_year: a sequel whose title contains the base film's title is not ambiguous =="
+# "Dune" is a weaker partial match (its own title is a substring of the
+# target); "Dune: Part Two"'s own title is an exact match for the target.
+# The exact match must win, not tie with the weaker partial match.
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Dune Part Two" "")
+assert_eq "resolves to the sequel, not an ambiguous tie with the base film" \
+    "tt15239678	Dune: Part Two	2024" "$result"
+
+echo "== find_by_title_year: the base film alone still resolves to itself, not the sequel =="
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Dune" "")
+assert_eq "bare 'Dune' resolves to the base film" "tt1160419	Dune	2021" "$result"
+
 test_summary_and_exit
