@@ -42,6 +42,7 @@ ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/films/Unmatched/S
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
+export FORCED_SUBS_LOCKFILE="$WORK/forced_subs.lock"
 export FID_CACHE="$WORK/fid_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
 export SCAN_LOG="$WORK/scan_log"
