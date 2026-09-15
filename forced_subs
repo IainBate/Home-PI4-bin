@@ -313,6 +313,45 @@ cmd_apply() {
     done < <(cmd_scan)
 }
 
+# --- report -----------------------------------------------------------
+
+report_body() {
+    local verbose="$1"
+    local scan_output
+    scan_output=$(cmd_scan)
+
+    echo "=== Already fine ==="
+    local has_forced_count
+    has_forced_count=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="HAS_FORCED"' | wc -l | tr -d ' ')
+    echo "$has_forced_count file(s) already have forced subs."
+    if [ "$verbose" = "true" ]; then
+        printf '%s\n' "$scan_output" | awk -F'\t' '$1=="HAS_FORCED" {print "  " $2}'
+    fi
+
+    echo ""
+    echo "=== Added by this script ==="
+    if [ -f "$APPLY_LOG" ]; then
+        awk -F'\t' '$3=="success" {print "  " $2}' "$APPLY_LOG" | sort -u
+    fi
+
+    echo ""
+    echo "=== You'll need to sort these out yourself ==="
+    printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" {print "  " $2 " (" $8 ")"}'
+    printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_KNOWN"' | while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
+        if unavailable_cache_is_fresh "$file"; then
+            local r
+            r=$(awk -F'\t' -v p="$file" '$1==p {v=$2} END{print v}' "$UNAVAILABLE_CACHE")
+            echo "  $file ($r)"
+        fi
+    done
+}
+
+cmd_report() {
+    local verbose="$1"
+    mkdir -p "$(dirname "$REPORT_FILE")" 2>/dev/null || true
+    report_body "$verbose" | tee "$REPORT_FILE"
+}
+
 # --- dispatch -------------------------------------------------------------
 
 main() {
