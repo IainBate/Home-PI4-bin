@@ -217,6 +217,37 @@ find_sidecar_srt() {
     find "$dir" -maxdepth 1 -iname "${base}.srt" -print -quit
 }
 
+# Sums each SRT cue's (end - start) duration from its timestamp lines
+# (HH:MM:SS,mmm --> HH:MM:SS,mmm), converts to seconds, and returns that
+# total as a percentage of the given video duration (also in seconds).
+# Mirrors convert_video's own forced-vs-full-track coverage heuristic,
+# applied here to a standalone sidecar file instead of an embedded stream.
+# If video_duration isn't a positive number, coverage can't be computed -
+# default to "100" (i.e. treat it as a full/untrustworthy track) rather
+# than divide by zero.
+srt_coverage_percent() {
+    local srt_file="$1" video_duration="$2"
+    [ -f "$srt_file" ] || { echo "100"; return; }
+    awk -F' --> ' -v dur="$video_duration" '
+        function to_seconds(t,   h, m, s) {
+            gsub(",", ".", t)
+            split(t, parts, ":")
+            h = parts[1]; m = parts[2]; s = parts[3]
+            return h * 3600 + m * 60 + s
+        }
+        /-->/ {
+            total += to_seconds($2) - to_seconds($1)
+        }
+        END {
+            if (dur + 0 > 0) {
+                printf "%.2f", (total / dur) * 100
+            } else {
+                printf "100"
+            }
+        }
+    ' "$srt_file"
+}
+
 remux_forced_subtitle() {
     local file="$1" srt="$2"
     local ext="${file##*.}"
@@ -224,9 +255,14 @@ remux_forced_subtitle() {
     [ "$ext" = "mkv" ] && sub_codec="srt"
     local tmp_out
     tmp_out="$(mktemp -u "$(dirname "$file")/.forced_subs_remux.XXXXXX").$ext"
+    # Belt-and-suspenders: covers a killed process (kill -9 on the whole
+    # tree) leaves this cleanup unrun, but any normal return path (error or
+    # success) from this function cleans up the temp file here.
+    trap 'rm -f "$tmp_out"' RETURN
 
-    if ! ffmpeg -y -i "$file" -i "$srt" -map 0:v -map 0:a -map 1:s \
-        -c:v copy -c:a copy -c:s "$sub_codec" \
+    if ! ffmpeg -y -i "$file" -i "$srt" \
+        -map 0:v -map 0:a -map 1:s -map 0:s? -map 0:t? \
+        -c copy -c:s:0 "$sub_codec" \
         -metadata:s:s:0 language=eng -disposition:s:0 forced \
         "$tmp_out" -hide_banner -loglevel error; then
         rm -f "$tmp_out"
