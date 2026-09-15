@@ -1132,15 +1132,15 @@ assert_eq "Moana - 2026 resolves to the 2026 entry" "tt9999999" "$(fid_cache_get
 assert_eq "Moana - 2016 resolves to the 2016 entry" "tt3521164" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - 2016.mp4" imdb_id)"
 
 echo "== the Moana case: no year in the filename is left unresolved, not guessed =="
-assert_eq "ambiguous file has no imdb_id" "" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - Unknown Year.mp4" imdb_id)"
-assert_eq "reason recorded as ambiguous" "ambiguous_title_multiple_years" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - Unknown Year.mp4" reason)"
+assert_eq "ambiguous file has no imdb_id" "" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" imdb_id)"
+assert_eq "reason recorded as ambiguous" "ambiguous_title_multiple_years" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" reason)"
 
 echo "== --set manually resolves an ambiguous file and is sticky =="
-"$FORCED_SUBS" identify --set "$WORK/films/Moana Films/Moana - Unknown Year.mp4" tt9999999 >/dev/null
-assert_eq "manually set imdb_id" "tt9999999" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - Unknown Year.mp4" imdb_id)"
-assert_eq "confidence is manual" "manual" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - Unknown Year.mp4" confidence)"
+"$FORCED_SUBS" identify --set "$WORK/films/Moana Films/Moana.mp4" tt9999999 >/dev/null
+assert_eq "manually set imdb_id" "tt9999999" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" imdb_id)"
+assert_eq "confidence is manual" "manual" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" confidence)"
 "$FORCED_SUBS" identify --rehash >/dev/null
-assert_eq "a later plain identify --rehash does not overwrite the manual entry" "manual" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana - Unknown Year.mp4" confidence)"
+assert_eq "a later plain identify --rehash does not overwrite the manual entry" "manual" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" confidence)"
 
 test_summary_and_exit
 ```
