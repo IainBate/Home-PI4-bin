@@ -16,7 +16,7 @@ trap 'rm -rf "$WORK"' EXIT
 # Each fixture lives in its own subdirectory: analyze_subtitles scans the
 # whole containing directory for sibling .srt files (it doesn't filter by
 # basename), so fixtures sharing a directory would contaminate each other.
-mkdir -p "$WORK/no_subs" "$WORK/high_coverage" "$WORK/low_coverage" "$WORK/external_srt"
+mkdir -p "$WORK/no_subs" "$WORK/high_coverage" "$WORK/low_coverage" "$WORK/external_srt" "$WORK/mp4_forced"
 
 ffmpeg -y -f lavfi -i testsrc=duration=10:size=320x180:rate=10 -f lavfi -i sine=duration=10 \
     -pix_fmt yuv420p "$WORK/base.mp4" -hide_banner -loglevel error
