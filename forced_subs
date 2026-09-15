@@ -461,7 +461,6 @@ report_body() {
 
 cmd_report() {
     local verbose="$1"
-    mkdir -p "$(dirname "$REPORT_FILE")" 2>/dev/null || true
     report_body "$verbose" | tee "$REPORT_FILE"
 }
 
@@ -470,6 +469,16 @@ cmd_report() {
 main() {
     local cmd="${1:-}"
     shift || true
+    # /mnt/HDD is an external USB drive. If it's unmounted, an empty
+    # FILMS_ROOT would otherwise look like a false "all clear" to
+    # scan/apply/report - and cmd_report's old mkdir -p on REPORT_FILE's
+    # parent would have created a shadow films/ dir on the SD card itself.
+    # A real, non-empty directory is a reasonable "is it mounted" proxy
+    # without depending on the `mountpoint` command being installed.
+    if [ ! -d "$FILMS_ROOT" ] || [ -z "$(find "$FILMS_ROOT" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+        echo "ERROR: $FILMS_ROOT doesn't exist or is empty - is /mnt/HDD actually mounted?" >&2
+        exit 1
+    fi
     case "$cmd" in
         identify)
             load_opensubtitles_creds
