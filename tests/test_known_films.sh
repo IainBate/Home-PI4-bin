@@ -30,6 +30,21 @@ films:
     year: 1977
     imdb_id: "tt0076759"
     editions: "theatrical:121"
+  - title: "Solo: A Star Wars Story"
+    aliases: "Solo"
+    year: 2018
+    imdb_id: "tt3778644"
+    editions: "theatrical:135"
+  - title: "Dune"
+    aliases: ""
+    year: 2021
+    imdb_id: "tt1160419"
+    editions: "theatrical:155"
+  - title: "Dune: Part Two"
+    aliases: "Dune Part Two"
+    year: 2024
+    imdb_id: "tt15239678"
+    editions: "theatrical:166"
 EOF
 
 echo "== lookup by imdb_id =="
