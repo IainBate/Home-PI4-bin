@@ -1085,7 +1085,7 @@ cp "$REPO_ROOT/lib/forced_subs_common.sh" "$REPO_ROOT/lib/known_films.py" "$WORK
 touch "$WORK/films/Star Wars/Phantom Menace.mp4"
 touch "$WORK/films/Moana Films/Moana - 2026.mp4"
 touch "$WORK/films/Moana Films/Moana - 2016.mp4"
-touch "$WORK/films/Moana Films/Moana - Unknown Year.mp4"
+touch "$WORK/films/Moana Films/Moana.mp4"  # deliberately no year/extra words: normalize_title_from_path (Task 3) only strips year/quality/codec tags, not a trailing "- <words>" suffix, so this is the fixture that actually reaches the no-year-info case
 
 cat > "$WORK/films.yaml" <<'EOF'
 films:
