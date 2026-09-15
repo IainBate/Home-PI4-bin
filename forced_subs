@@ -258,7 +258,11 @@ remux_forced_subtitle() {
     tmp_out="$(mktemp -u "$(dirname "$file")/.forced_subs_remux.XXXXXX").$ext"
     # Belt-and-suspenders: covers a killed process (kill -9 on the whole
     # tree) leaves this cleanup unrun, but any normal return path (error or
-    # success) from this function cleans up the temp file here.
+    # success) from this function cleans up the temp file here. Bash's
+    # RETURN trap is NOT function-scoped in practice - once set, it keeps
+    # firing on every later function return up the call stack (here,
+    # cmd_apply's own return) unless explicitly disarmed - so every exit
+    # path below disarms it (`trap - RETURN`) right before returning.
     trap 'rm -f "$tmp_out"' RETURN
 
     if ! ffmpeg -y -i "$file" -i "$srt" \
@@ -267,6 +271,7 @@ remux_forced_subtitle() {
         -metadata:s:s:0 language=eng -disposition:s:0 forced \
         "$tmp_out" -hide_banner -loglevel error; then
         rm -f "$tmp_out"
+        trap - RETURN
         return 1
     fi
 
@@ -277,9 +282,11 @@ remux_forced_subtitle() {
 
     if [ "$orig_dur" != "$new_dur" ] || [ "${has_forced:-0}" -lt 1 ]; then
         rm -f "$tmp_out"
+        trap - RETURN
         return 1
     fi
     mv "$tmp_out" "$file"
+    trap - RETURN
 }
 
 epoch_of_date() {
