@@ -198,6 +198,117 @@ cmd_scan() {
     done < <(walk_films "$FILMS_ROOT")
 }
 
+# --- apply ------------------------------------------------------------
+
+find_sidecar_srt() {
+    local file="$1" dir base
+    dir=$(dirname "$file")
+    base=$(basename "$file")
+    base="${base%.*}"
+    find "$dir" -maxdepth 1 -iname "${base}.srt" -print -quit
+}
+
+remux_forced_subtitle() {
+    local file="$1" srt="$2"
+    local ext="${file##*.}"
+    local sub_codec="mov_text"
+    [ "$ext" = "mkv" ] && sub_codec="srt"
+    local tmp_out
+    tmp_out=$(mktemp --suffix=".$ext")
+
+    if ! ffmpeg -y -i "$file" -i "$srt" -map 0:v -map 0:a -map 1:s \
+        -c:v copy -c:a copy -c:s "$sub_codec" \
+        -metadata:s:s:0 language=eng -disposition:s:0 forced \
+        "$tmp_out" -hide_banner -loglevel error; then
+        rm -f "$tmp_out"
+        return 1
+    fi
+
+    local orig_dur new_dur has_forced
+    orig_dur=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | cut -d. -f1)
+    new_dur=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$tmp_out" 2>/dev/null | cut -d. -f1)
+    has_forced=$(ffprobe -v error -select_streams s -show_entries stream_disposition=forced -of csv=p=0 "$tmp_out" 2>/dev/null | grep -c '^1$' || true)
+
+    if [ "$orig_dur" != "$new_dur" ] || [ "${has_forced:-0}" -lt 1 ]; then
+        rm -f "$tmp_out"
+        return 1
+    fi
+    mv "$tmp_out" "$file"
+}
+
+unavailable_cache_is_fresh() {
+    local file="$1"
+    [ -f "$UNAVAILABLE_CACHE" ] || return 1
+    local last_checked
+    last_checked=$(awk -F'\t' -v p="$file" '$1==p {v=$3} END{print v}' "$UNAVAILABLE_CACHE")
+    [ -n "$last_checked" ] || return 1
+    local age_days
+    age_days=$(( ( $(date +%s) - $(date -d "$last_checked" +%s) ) / 86400 ))
+    [ "$age_days" -lt 7 ]
+}
+
+unavailable_cache_set() {
+    local file="$1" reason="$2"
+    mkdir -p "$(dirname "$UNAVAILABLE_CACHE")"
+    touch "$UNAVAILABLE_CACHE"
+    local tmp
+    tmp=$(mktemp)
+    awk -F'\t' -v p="$file" '$1 != p' "$UNAVAILABLE_CACHE" > "$tmp"
+    printf '%s\t%s\t%s\n' "$file" "$reason" "$(date -I)" >> "$tmp"
+    mv "$tmp" "$UNAVAILABLE_CACHE"
+}
+
+log_apply() {
+    mkdir -p "$(dirname "$APPLY_LOG")" 2>/dev/null || true
+    printf '%s\t%s\t%s\t%s\n' "$(date -Iseconds)" "$1" "$2" "$3" >> "$APPLY_LOG"
+}
+
+cmd_apply() {
+    local max_downloads="$1"
+    local success_count=0
+    while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
+        [ "$bucket" = "NEEDS_FORCED_KNOWN" ] || continue
+        [ "$success_count" -lt "$max_downloads" ] || break
+        unavailable_cache_is_fresh "$file" && continue
+
+        local srt_path=""
+        if [ "$external" = "1" ]; then
+            srt_path=$(find_sidecar_srt "$file")
+        else
+            local hash result
+            hash=$(python3 "$LIBDIR/ost.py" hash "$file")
+            result=$(python3 "$LIBDIR/ost.py" find_forced_by_hash "$hash" 2>>"$APPLY_LOG" || true)
+            if [ -z "$result" ]; then
+                local imdb_numeric
+                imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
+                result=$(python3 "$LIBDIR/ost.py" find_forced_by_imdb "$imdb_numeric" 2>>"$APPLY_LOG" || true)
+            fi
+            if [ -z "$result" ]; then
+                unavailable_cache_set "$file" "no_match_found"
+                log_apply "$file" "unavailable" "no_match_found"
+                continue
+            fi
+            local sub_file_id
+            sub_file_id=$(printf '%s' "$result" | cut -f1)
+            srt_path=$(mktemp --suffix=.srt)
+            if ! python3 "$LIBDIR/ost.py" download "$sub_file_id" "$srt_path" >>"$APPLY_LOG" 2>&1 || [ ! -s "$srt_path" ]; then
+                unavailable_cache_set "$file" "download_failed"
+                log_apply "$file" "unavailable" "download_failed"
+                rm -f "$srt_path"
+                continue
+            fi
+        fi
+
+        if [ -n "$srt_path" ] && remux_forced_subtitle "$file" "$srt_path"; then
+            log_apply "$file" "success" "remuxed"
+            success_count=$((success_count + 1))
+        else
+            unavailable_cache_set "$file" "remux_failed"
+            log_apply "$file" "unavailable" "remux_failed"
+        fi
+    done < <(cmd_scan)
+}
+
 # --- dispatch -------------------------------------------------------------
 
 main() {
