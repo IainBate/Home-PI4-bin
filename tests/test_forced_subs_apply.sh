@@ -106,10 +106,24 @@ elif cmd == "download":
     with open(sys.argv[3], "wb") as f:
         f.write(open("$WORK/dummy.srt", "rb").read())
     print("19\tok")
+elif cmd == "login":
+    print("test-token-abc123")
 PYEOF
+
+# Fixture secrets.yaml so opensubtitles_login's now-required non-empty
+# credential check (Fix 1) has something real to read, isolated from the
+# repo's own (test-machine, likely absent) secrets.yaml.
+cat > "$WORK/secrets.yaml" <<'EOF'
+opensubtitles:
+  api_key: "test-key"
+  username: "test-user"
+  password: "test-pass"
+EOF
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
+export FORCED_SUBS_SECRETS_YAML="$WORK/secrets.yaml"
+export FORCED_SUBS_LOCKFILE="$WORK/forced_subs.lock"
 export FID_CACHE="$WORK/fid_cache"
 export SCAN_CACHE="$WORK/scan_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
