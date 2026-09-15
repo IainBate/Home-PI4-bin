@@ -68,20 +68,31 @@ def cmd_find_by_title_year(yaml_path, normalized_title, year):
     target = _normalize(normalized_title)
     if not target:
         return
-    candidates = []
+    exact_candidates = []
+    partial_candidates = []
     for rec in _parse_records(yaml_path):
         title_norm = _normalize(rec.get("title", ""))
         alias_norms = [_normalize(a) for a in rec.get("aliases", "").split("|") if a]
         names = [n for n in [title_norm] + alias_norms if n]
-        # Real filenames often concatenate multiple identifying phrases
-        # (e.g. "Episode I - The Phantom Menace" combines two separate
-        # curated aliases into one string) - a word-boundary substring
-        # match in either direction catches this without ever guessing
-        # across unrelated titles: the year-based disambiguation below
-        # still applies exactly the same way when it produces more than
-        # one candidate.
-        if any(_contains_as_words(target, n) or _contains_as_words(n, target) for n in names):
-            candidates.append(rec)
+        if any(n == target for n in names):
+            exact_candidates.append(rec)
+        elif any(_contains_as_words(target, n) or _contains_as_words(n, target) for n in names):
+            # Real filenames often concatenate multiple identifying phrases
+            # (e.g. "Episode I - The Phantom Menace" combines two separate
+            # curated aliases into one string) - a word-boundary substring
+            # match in either direction catches this without ever guessing
+            # across unrelated titles.
+            partial_candidates.append(rec)
+    # An exact full-string match always wins over a weaker partial/
+    # containment match from a *different* film - this is what correctly
+    # resolves e.g. "Dune Part Two" to the sequel rather than an
+    # ambiguous tie with "Dune" (whose alias is merely contained in the
+    # target), and "Solo - A Star Wars Story" to Solo rather than a tie
+    # with another film's generic "Star Wars" alias. Two candidates tied
+    # at the exact-match tier (e.g. two different curated films that both
+    # alias to plain "Moana") still fall through to year disambiguation
+    # below, exactly as before.
+    candidates = exact_candidates if exact_candidates else partial_candidates
     # Year only matters to disambiguate a genuine title collision (e.g. two
     # different Moana entries) - a single match is returned regardless of
     # whether the filename happened to carry a (possibly stale/absent) year.
