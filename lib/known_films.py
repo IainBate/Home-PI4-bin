@@ -46,6 +46,16 @@ def _normalize(text):
     return re.sub(r'[^a-z0-9]+', ' ', text.lower()).strip()
 
 
+def _contains_as_words(haystack, needle):
+    """True if needle's words appear as a contiguous run within haystack's
+    words. Both args must already be space-normalized (see _normalize).
+    Space-padding both sides makes this a word-boundary check, not a raw
+    substring check - "war" must not match inside "warfare"."""
+    if not haystack or not needle:
+        return False
+    return f" {haystack} ".find(f" {needle} ") != -1
+
+
 def cmd_lookup(yaml_path, imdb_id):
     for rec in _parse_records(yaml_path):
         if rec.get("imdb_id") == imdb_id:
@@ -62,7 +72,15 @@ def cmd_find_by_title_year(yaml_path, normalized_title, year):
     for rec in _parse_records(yaml_path):
         title_norm = _normalize(rec.get("title", ""))
         alias_norms = [_normalize(a) for a in rec.get("aliases", "").split("|") if a]
-        if target == title_norm or target in alias_norms:
+        names = [n for n in [title_norm] + alias_norms if n]
+        # Real filenames often concatenate multiple identifying phrases
+        # (e.g. "Episode I - The Phantom Menace" combines two separate
+        # curated aliases into one string) - a word-boundary substring
+        # match in either direction catches this without ever guessing
+        # across unrelated titles: the year-based disambiguation below
+        # still applies exactly the same way when it produces more than
+        # one candidate.
+        if any(_contains_as_words(target, n) or _contains_as_words(n, target) for n in names):
             candidates.append(rec)
     # Year only matters to disambiguate a genuine title collision (e.g. two
     # different Moana entries) - a single match is returned regardless of
