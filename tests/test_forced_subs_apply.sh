@@ -69,7 +69,7 @@ export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test 
 "$FORCED_SUBS" apply --max-downloads 5 >/dev/null
 
 echo "== the matched file got a forced subtitle track muxed in =="
-analyze=$("$REPO_ROOT/convert_video" --analyze-subs "$WORK/films/Star Wars/Phantom Menace.mp4")
+analyze=$("$REPO_ROOT/convert_video" --analyze-subs "$WORK/films/Star Wars/Phantom Menace.mkv")
 assert_contains "FORCED=1 after apply" "$analyze" "FORCED=1"
 
 echo "== the unmatched file was left untouched and logged unavailable =="
