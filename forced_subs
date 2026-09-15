@@ -290,7 +290,7 @@ cmd_apply() {
             fi
             local sub_file_id
             sub_file_id=$(printf '%s' "$result" | cut -f1)
-            srt_path=$(mktemp --suffix=.srt)
+            srt_path="$(mktemp -u "${TMPDIR:-/tmp}/forced_subs_sub.XXXXXX").srt"
             if ! python3 "$LIBDIR/ost.py" download "$sub_file_id" "$srt_path" >>"$APPLY_LOG" 2>&1 || [ ! -s "$srt_path" ]; then
                 unavailable_cache_set "$file" "download_failed"
                 log_apply "$file" "unavailable" "download_failed"
