@@ -102,6 +102,102 @@ cmd_identify() {
     done < <(walk_films "$FILMS_ROOT")
 }
 
+# --- scan -----------------------------------------------------------------
+
+# Compares the file's actual duration (minutes) against an editions string
+# ("name:minutes,name:minutes") and returns the closest name within a
+# 3-minute tolerance, or "unmatched_edition".
+pick_edition() {
+    local file="$1" editions="$2"
+    local duration_min
+    duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
+    local best="" best_diff=999999
+    IFS=',' read -ra parts <<< "$editions"
+    for part in "${parts[@]}"; do
+        local name="${part%%:*}" minutes="${part##*:}"
+        local diff=$(( duration_min > minutes ? duration_min - minutes : minutes - duration_min ))
+        if [ "$diff" -lt "$best_diff" ]; then best_diff=$diff; best="$name"; fi
+    done
+    if [ -n "$best" ] && [ "$best_diff" -le 3 ]; then echo "$best"; else echo "unmatched_edition"; fi
+}
+
+# scan_cache row: path \t file_stat_signature \t <the 8-field result line>
+# See "Incremental scanning" in the spec: lets scan skip re-probing a file
+# whose last-known bucket was HAS_FORCED and whose size/mtime haven't
+# changed since.
+scan_cache_get() {
+    local file="$1"
+    [ -f "$SCAN_CACHE" ] || return 1
+    awk -F'\t' -v p="$file" '$1==p {print; found=1} END{exit !found}' "$SCAN_CACHE"
+}
+
+scan_cache_set() {
+    local file="$1" sig="$2" result_line="$3"
+    mkdir -p "$(dirname "$SCAN_CACHE")"
+    touch "$SCAN_CACHE"
+    local tmp
+    tmp=$(mktemp)
+    awk -F'\t' -v p="$file" '$1 != p' "$SCAN_CACHE" > "$tmp"
+    printf '%s\t%s\t%s\n' "$file" "$sig" "$result_line" >> "$tmp"
+    mv "$tmp" "$SCAN_CACHE"
+}
+
+cmd_scan() {
+    while IFS= read -r file; do
+        local sig cached_row
+        sig=$(file_stat_signature "$file")
+        if cached_row=$(scan_cache_get "$file"); then
+            local cached_sig cached_bucket
+            cached_sig=$(printf '%s' "$cached_row" | cut -f2)
+            cached_bucket=$(printf '%s' "$cached_row" | cut -f3)
+            if [ "$cached_sig" = "$sig" ] && [ "$cached_bucket" = "HAS_FORCED" ]; then
+                printf '%s\n' "$cached_row" | cut -f3-
+                continue
+            fi
+        fi
+
+        local analyze forced coverage external bucket imdb_id="" title="" edition="" reason=""
+        analyze=$("$CONVERT_VIDEO" --analyze-subs "$file" 2>/dev/null)
+        forced=$(printf '%s' "$analyze" | grep -oE 'FORCED=[0-9]+' | cut -d= -f2)
+        coverage=$(printf '%s' "$analyze" | grep -oE 'COVERAGE=[0-9.]+' | cut -d= -f2)
+        external=$(printf '%s' "$analyze" | grep -oE 'EXTERNAL_SRT=[0-9]+' | cut -d= -f2)
+
+        local has_real_forced=false
+        if [ "${forced:-0}" = "1" ] && awk -v c="${coverage:-0}" 'BEGIN{exit !(c>=15)}'; then
+            has_real_forced=true
+        fi
+
+        if [ "${external:-0}" = "1" ] || [ "$has_real_forced" = "true" ]; then
+            bucket="HAS_FORCED"
+        else
+            if ! fid_cache_get_field "$file" confidence >/dev/null 2>&1; then
+                forced_subs_identify_one "$file"
+            fi
+            imdb_id=$(fid_cache_get_field "$file" imdb_id 2>/dev/null || true)
+            title=$(fid_cache_get_field "$file" title 2>/dev/null || true)
+            if [ -z "$imdb_id" ]; then
+                bucket="NEEDS_FORCED_UNKNOWN"
+                reason=$(fid_cache_get_field "$file" reason 2>/dev/null || echo "unresolved")
+            else
+                local lookup
+                lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
+                if [ -z "$lookup" ]; then
+                    bucket="NEEDS_FORCED_UNKNOWN"; reason="not_on_known_list"
+                else
+                    bucket="NEEDS_FORCED_KNOWN"
+                    local editions
+                    IFS=$'\t' read -r _ _ editions <<< "$lookup"
+                    edition=$(pick_edition "$file" "$editions")
+                fi
+            fi
+        fi
+        local result_line
+        result_line=$(printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s' "$bucket" "$file" "$imdb_id" "$title" "$edition" "${coverage:-0}" "${external:-0}" "$reason")
+        scan_cache_set "$file" "$sig" "$result_line"
+        printf '%s\n' "$result_line"
+    done < <(walk_films "$FILMS_ROOT")
+}
+
 # --- dispatch -------------------------------------------------------------
 
 main() {
