@@ -71,9 +71,14 @@ assert_eq "matches despite combining both 'Episode I' and 'Phantom Menace'" \
     "tt0120915	Star Wars: Episode I - The Phantom Menace	1999" "$result"
 
 echo "== find_by_title_year: word-boundary matching rejects partial-word overlap =="
-# "war" must not match inside "warfare" - _contains_as_words is a
-# word-boundary check, not a raw substring check.
+# "War" (from the "Star Wars" alias) must not match inside "Warfare" -
+# _contains_as_words is a word-boundary check, not a raw substring check.
 result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Modern Warfare Chronicles" "")
 assert_eq "no false match from a partial word overlap" "" "$result"
+
+echo "== find_by_title_year: a real word-boundary match on a multi-word alias still works =="
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Star Wars - Behind the Scenes" "")
+assert_eq "matches via the 'Star Wars' alias as whole words" \
+    "tt0076759	Star Wars: Episode IV - A New Hope	1977" "$result"
 
 test_summary_and_exit
