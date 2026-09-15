@@ -54,10 +54,13 @@ STALE_FILE="$WORK/films/StaleCache/Stale Cache Film.mkv"
 
 # A sidecar .srt sitting right next to the video, matching its basename -
 # find_sidecar_srt (and convert_video's external-subtitle detection) should
-# pick this up.
+# pick this up. Cue is deliberately short (0.3s of a 3s video, ~10%
+# coverage) so it clears the Fix-2 <15% forced-vs-full trustworthiness
+# check; test_forced_subs_apply_sidecar_coverage.sh covers the opposite
+# (full-coverage, untrustworthy) case.
 cat > "$WORK/films/Sidecar/Some Curated Film.srt" <<'EOF'
 1
-00:00:00,000 --> 00:00:02,000
+00:00:00,000 --> 00:00:00,300
 Sidecar line
 EOF
 
