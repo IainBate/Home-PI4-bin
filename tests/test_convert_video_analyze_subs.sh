@@ -89,6 +89,12 @@ out=$(run_analyze "$WORK/external_srt/external_srt.mkv")
 assert_contains "external_srt: reports FORCED=0" "$out" "FORCED=0"
 assert_contains "external_srt: reports EXTERNAL_SRT=1" "$out" "EXTERNAL_SRT=1"
 
+echo "== forced English subtitle in an mp4/mov_text container =="
+out=$(run_analyze "$WORK/mp4_forced/mp4_forced.mp4")
+assert_contains "mp4_forced: reports FORCED=1 (not masked by the [0x..] track-id bracket)" "$out" "FORCED=1"
+coverage=$(echo "$out" | grep -oE 'COVERAGE=[0-9.]+' | cut -d= -f2)
+assert_eq "mp4_forced: reports a non-empty coverage value" "no" "$([[ -z "$coverage" ]] && echo yes || echo no)"
+
 echo "== analyze mode never encodes anything =="
 run_analyze "$WORK/no_subs/no_subs.mkv" >/dev/null
 shopt -s nullglob
