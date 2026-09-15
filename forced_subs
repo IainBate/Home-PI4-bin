@@ -214,7 +214,7 @@ remux_forced_subtitle() {
     local sub_codec="mov_text"
     [ "$ext" = "mkv" ] && sub_codec="srt"
     local tmp_out
-    tmp_out=$(mktemp).$ext
+    tmp_out=$(mktemp --suffix=".$ext")
 
     if ! ffmpeg -y -i "$file" -i "$srt" -map 0:v -map 0:a -map 1:s \
         -c:v copy -c:a copy -c:s "$sub_codec" \
