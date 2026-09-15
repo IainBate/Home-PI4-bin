@@ -55,4 +55,20 @@ echo "== find_by_title_year: no match at all =="
 result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Completely Unknown Film" "")
 assert_eq "empty output" "" "$result"
 
+echo "== find_by_title_year: real-world compound filename combining two aliases =="
+# Real library filenames often concatenate multiple identifying phrases
+# into one string (e.g. "Episode I - The Phantom Menace") rather than
+# using a single curated alias verbatim - this must still match via
+# word-boundary substring containment, not require an exact whole-string
+# equality.
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Episode I - The Phantom Menace" "")
+assert_eq "matches despite combining both 'Episode I' and 'Phantom Menace'" \
+    "tt0120915	Star Wars: Episode I - The Phantom Menace	1999" "$result"
+
+echo "== find_by_title_year: word-boundary matching rejects partial-word overlap =="
+# "war" must not match inside "warfare" - _contains_as_words is a
+# word-boundary check, not a raw substring check.
+result=$(python3 "$KNOWN_FILMS_PY" find_by_title_year "$WORK/films.yaml" "Modern Warfare Chronicles" "")
+assert_eq "no false match from a partial word overlap" "" "$result"
+
 test_summary_and_exit
