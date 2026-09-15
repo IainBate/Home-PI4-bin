@@ -24,16 +24,24 @@ export FID_CACHE UNAVAILABLE_CACHE SCAN_CACHE
 . "$LIBDIR/forced_subs_common.sh"
 
 load_opensubtitles_creds() {
-    OST_API_KEY=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles api_key)
-    OST_USERNAME=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles username)
-    OST_PASSWORD=$(yaml_get_2level "$REPO_ROOT/secrets.yaml" opensubtitles password)
+    OST_API_KEY=$(yaml_get_2level "$SECRETS_YAML" opensubtitles api_key)
+    OST_USERNAME=$(yaml_get_2level "$SECRETS_YAML" opensubtitles username)
+    OST_PASSWORD=$(yaml_get_2level "$SECRETS_YAML" opensubtitles password)
     OST_USER_AGENT="forced_subs v1.0.0"
     export OST_API_KEY OST_USERNAME OST_PASSWORD OST_USER_AGENT
 }
 
 opensubtitles_login() {
     load_opensubtitles_creds
+    if [ -z "$OST_API_KEY" ] || [ -z "$OST_USERNAME" ] || [ -z "$OST_PASSWORD" ]; then
+        echo "ERROR: OpenSubtitles credentials missing from secrets.yaml (opensubtitles.api_key/username/password) - cannot run apply." >&2
+        exit 1
+    fi
     OST_TOKEN=$(python3 "$LIBDIR/ost.py" login)
+    if [ -z "$OST_TOKEN" ]; then
+        echo "ERROR: OpenSubtitles login failed - check credentials/network. Not proceeding with apply." >&2
+        exit 1
+    fi
     export OST_TOKEN
 }
 
