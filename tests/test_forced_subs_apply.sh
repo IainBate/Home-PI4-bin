@@ -60,6 +60,7 @@ PYEOF
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
 export FID_CACHE="$WORK/fid_cache"
+export SCAN_CACHE="$WORK/scan_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
 export SCAN_LOG="$WORK/scan_log"
 export APPLY_LOG="$WORK/apply_log"
