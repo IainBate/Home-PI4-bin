@@ -519,4 +519,25 @@ main() {
     esac
 }
 
-main "$@"
+# crontab.txt schedules apply daily, identify weekly, and identify again
+# @reboot - all three read-filter-rewrite the same cache files via a
+# non-atomic read-then-mv pattern. A non-blocking lock makes a second
+# concurrent invocation (any subcommand) fail fast instead of racing.
+if command -v flock >/dev/null 2>&1; then
+    (
+        flock -n 9 || { echo "Another forced_subs run is already in progress - exiting." >&2; exit 1; }
+        main "$@"
+    ) 9>"$LOCKFILE"
+else
+    # Portable fallback for platforms without flock (e.g. macOS, used here
+    # during development/testing - the Pi's Debian-based OS has flock as
+    # standard). mkdir is atomic on POSIX filesystems, so this still fails
+    # fast against a genuinely concurrent run.
+    lockdir="${LOCKFILE}.d"
+    if ! mkdir "$lockdir" 2>/dev/null; then
+        echo "Another forced_subs run is already in progress - exiting." >&2
+        exit 1
+    fi
+    trap 'rmdir "$lockdir" 2>/dev/null' EXIT
+    main "$@"
+fi
