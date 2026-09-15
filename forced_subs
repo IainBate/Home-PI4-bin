@@ -167,7 +167,7 @@ cmd_scan() {
             has_real_forced=true
         fi
 
-        if [ "${external:-0}" = "1" ] || [ "$has_real_forced" = "true" ]; then
+        if [ "$has_real_forced" = "true" ]; then
             bucket="HAS_FORCED"
         else
             if ! fid_cache_get_field "$file" confidence >/dev/null 2>&1; then
