@@ -42,9 +42,13 @@ cat > "$WORK/lib/ost.py" <<PYEOF
 import sys
 cmd = sys.argv[1]
 if cmd == "hash":
-    print("0000000000000000")
+    if "Phantom" in sys.argv[2]:
+        print("aaaaaaaaaaaaaaaa")
+    else:
+        print("bbbbbbbbbbbbbbbb")
 elif cmd == "find_forced_by_hash":
-    print("4461104\tPhantom.Menace.Forced\ten")
+    if sys.argv[2] == "aaaaaaaaaaaaaaaa":
+        print("4461104\tPhantom.Menace.Forced\ten")
 elif cmd == "find_forced_by_imdb":
     pass
 elif cmd == "download":
