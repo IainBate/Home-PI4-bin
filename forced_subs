@@ -51,7 +51,7 @@ forced_subs_identify_one() {
 
     local hash hash_result imdb_id="" title="" year="" confidence reason=""
     hash=$(python3 "$LIBDIR/ost.py" hash "$file")
-    hash_result=$(python3 "$LIBDIR/ost.py" identify_by_hash "$hash" 2>>"${SCAN_LOG:-/dev/null}" || true)
+    hash_result=$(python3 "$LIBDIR/ost.py" identify_by_hash "$hash" 2>/dev/null || true)
 
     if [ -n "$hash_result" ]; then
         IFS=$'\t' read -r imdb_id title year <<< "$hash_result"
