@@ -236,6 +236,10 @@ remux_forced_subtitle() {
     mv "$tmp_out" "$file"
 }
 
+epoch_of_date() {
+    date -d "$1" +%s 2>/dev/null || date -j -f '%Y-%m-%d' "$1" +%s
+}
+
 unavailable_cache_is_fresh() {
     local file="$1"
     [ -f "$UNAVAILABLE_CACHE" ] || return 1
@@ -243,7 +247,7 @@ unavailable_cache_is_fresh() {
     last_checked=$(awk -F'\t' -v p="$file" '$1==p {v=$3} END{print v}' "$UNAVAILABLE_CACHE")
     [ -n "$last_checked" ] || return 1
     local age_days
-    age_days=$(( ( $(date +%s) - $(date -d "$last_checked" +%s) ) / 86400 ))
+    age_days=$(( ( $(epoch_of_date "$(date +%Y-%m-%d)") - $(epoch_of_date "$last_checked") ) / 86400 ))
     [ "$age_days" -lt 7 ]
 }
 
