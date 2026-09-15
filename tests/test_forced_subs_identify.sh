@@ -45,6 +45,7 @@ PYEOF
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
+export FORCED_SUBS_LOCKFILE="$WORK/forced_subs.lock"
 export FID_CACHE="$WORK/fid_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
 export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test
