@@ -48,6 +48,16 @@ ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/low.srt" -map 0:v -map 0:a -map 1:s -c:v
 ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/external_srt/external_srt.mkv" -hide_banner -loglevel error
 cp "$WORK/high.srt" "$WORK/external_srt/external_srt.srt"
 
+# forced English subtitle in an mp4/mov_text container (not mkv/srt like the
+# other fixtures above): ffmpeg's dump shows a bracketed track-id here
+# ("Stream #0:2[0x3](eng):") that mkv never has - this fixture exists
+# specifically to catch check_english_forced_sub failing to recognize a
+# genuinely forced mp4 track, which it silently did before that regex
+# learned to tolerate the bracket (confirmed present on both ffmpeg 7.1.5
+# and 9.0.1, so not a version-specific fluke).
+ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/high.srt" -map 0:v -map 0:a -map 1:s -c:v copy -c:a copy -c:s mov_text \
+    -metadata:s:s:0 language=eng -disposition:s:0 forced "$WORK/mp4_forced/mp4_forced.mp4" -hide_banner -loglevel error
+
 run_analyze() {
     "$CONVERT_VIDEO" --analyze-subs "$1"
 }
