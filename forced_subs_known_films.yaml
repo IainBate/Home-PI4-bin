@@ -49,3 +49,73 @@ films:
     year: 2016
     imdb_id: "tt3521164"
     editions: "theatrical:107"
+  - title: "Star Wars: Episode VII - The Force Awakens"
+    aliases: "The Force Awakens|Force Awakens|Episode VII"
+    year: 2015
+    imdb_id: "tt2488496"
+    editions: "theatrical:138"
+  - title: "Star Wars: Episode VIII - The Last Jedi"
+    aliases: "The Last Jedi|Episode VIII"
+    year: 2017
+    imdb_id: "tt2527336"
+    editions: "theatrical:152"
+  - title: "Star Wars: Episode IX - The Rise of Skywalker"
+    aliases: "The Rise of Skywalker|Rise of Skywalker|Episode IX"
+    year: 2019
+    imdb_id: "tt2527338"
+    editions: "theatrical:142"
+  - title: "Rogue One: A Star Wars Story"
+    aliases: "Rogue One"
+    year: 2016
+    imdb_id: "tt3748528"
+    editions: "theatrical:133"
+  - title: "Solo: A Star Wars Story"
+    aliases: "Solo - A Star Wars Story|Solo"
+    year: 2018
+    imdb_id: "tt3778644"
+    editions: "theatrical:135"
+  - title: "Avatar"
+    aliases: ""
+    year: 2009
+    imdb_id: "tt0499549"
+    editions: "theatrical:162"
+  - title: "Avatar: The Way of Water"
+    aliases: "The Way of Water|Way of Water"
+    year: 2022
+    imdb_id: "tt1630029"
+    editions: "theatrical:192"
+  - title: "Dune"
+    aliases: ""
+    year: 2021
+    imdb_id: "tt1160419"
+    editions: "theatrical:155"
+  - title: "Dune: Part Two"
+    aliases: "Part Two|Dune Part Two|Dune 2"
+    year: 2024
+    imdb_id: "tt15239678"
+    editions: "theatrical:166"
+  - title: "The Hobbit: An Unexpected Journey"
+    aliases: "An Unexpected Journey|Unexpected Journey"
+    year: 2012
+    imdb_id: "tt0903624"
+    editions: "theatrical:169,extended:182"
+  - title: "The Hobbit: The Desolation of Smaug"
+    aliases: "The Desolation of Smaug|Desolation of Smaug"
+    year: 2013
+    imdb_id: "tt1170358"
+    editions: "theatrical:161,extended:186"
+  - title: "The Hobbit: The Battle of the Five Armies"
+    aliases: "The Battle of the Five Armies|Battle of the Five Armies"
+    year: 2014
+    imdb_id: "tt2310332"
+    editions: "theatrical:144,extended:164"
+  - title: "The Godfather"
+    aliases: ""
+    year: 1972
+    imdb_id: "tt0068646"
+    editions: "theatrical:175"
+  - title: "The Godfather Part II"
+    aliases: "Godfather Part II|Godfather Part 2|Part II"
+    year: 1974
+    imdb_id: "tt0071562"
+    editions: "theatrical:202"
