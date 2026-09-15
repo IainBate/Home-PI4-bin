@@ -32,9 +32,11 @@ ffmpeg -y -f lavfi -i testsrc=duration=3:size=320x180:rate=10 -f lavfi -i sine=d
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
+export FORCED_SUBS_LOCKFILE="$WORK/forced_subs.lock"
 export FID_CACHE="$WORK/fid_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
 export SCAN_LOG="$WORK/scan_log"
+export SCAN_CACHE="$WORK/scan_cache"
 export APPLY_LOG="$WORK/apply_log"
 export UNAVAILABLE_CACHE="$WORK/unavailable_cache"
 export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test
