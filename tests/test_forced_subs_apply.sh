@@ -26,8 +26,8 @@ films:
 EOF
 
 ffmpeg -y -f lavfi -i testsrc=duration=3:size=320x180:rate=10 -f lavfi -i sine=duration=3 \
-    -pix_fmt yuv420p "$WORK/films/Star Wars/Phantom Menace.mp4" -hide_banner -loglevel error
-cp "$WORK/films/Star Wars/Phantom Menace.mp4" "$WORK/films/Star Wars/No Subtitle Available Film.mp4"
+    -pix_fmt yuv420p "$WORK/films/Star Wars/Phantom Menace.mkv" -hide_banner -loglevel error
+cp "$WORK/films/Star Wars/Phantom Menace.mkv" "$WORK/films/Star Wars/No Subtitle Available Film.mkv"
 
 cat > "$WORK/dummy.srt" <<'EOF'
 1
