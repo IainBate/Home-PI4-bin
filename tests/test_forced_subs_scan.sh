@@ -45,6 +45,7 @@ export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
 export FID_CACHE="$WORK/fid_cache"
 export FORCED_SUBS_FILMS_ROOT="$WORK/films"
 export SCAN_LOG="$WORK/scan_log"
+export SCAN_CACHE="$WORK/scan_cache"
 export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test
 
 out=$("$FORCED_SUBS" scan)
@@ -61,13 +62,12 @@ assert_contains "picks the theatrical edition" "$line" "theatrical"
 echo "== NEEDS_FORCED_UNKNOWN for a file not on the curated list =="
 line=$(printf '%s\n' "$out" | grep "Some Random Film")
 assert_contains "bucketed NEEDS_FORCED_UNKNOWN" "$line" "NEEDS_FORCED_UNKNOWN"
-assert_contains "reason is not_on_known_list" "$line" "not_on_known_list"
+assert_contains "reason is no_match" "$line" "no_match"
 
 echo "== scan also appends to SCAN_LOG =="
 assert_file_exists "scan log was written" "$SCAN_LOG"
 
 echo "== incremental: an unchanged HAS_FORCED file is replayed from cache, not re-probed =="
-export SCAN_CACHE="$WORK/scan_cache"
 "$FORCED_SUBS" scan >/dev/null  # populate the cache
 # Point CONVERT_VIDEO at a nonexistent path for this run only: if the cached
 # HAS_FORCED file still reports correctly, it proves scan didn't need to
