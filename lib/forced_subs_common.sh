@@ -4,7 +4,8 @@
 walk_films() {
     local root="$1"
     find "$root" -type d -name "Our Family" -prune -o -type f \
-        \( -iname "*.mp4" -o -iname "*.mkv" -o -iname "*.m4v" -o -iname "*.avi" \) -print
+        \( -iname "*.mp4" -o -iname "*.mkv" -o -iname "*.m4v" -o -iname "*.avi" \) \
+        -not -name ".forced_subs_remux.*" -print
 }
 
 # A 4-digit 19xx/20xx year token, if present (last one wins if several).
