@@ -208,6 +208,11 @@ main() {
             load_opensubtitles_creds
             cmd_identify "$@"
             ;;
+        scan)
+            load_opensubtitles_creds
+            mkdir -p "$(dirname "$SCAN_LOG")" 2>/dev/null || true
+            cmd_scan | tee -a "$SCAN_LOG"
+            ;;
         *)
             echo "Usage: forced_subs {identify|scan|apply|report} [options]" >&2
             exit 2
