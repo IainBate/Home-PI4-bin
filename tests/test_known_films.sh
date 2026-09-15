@@ -25,6 +25,11 @@ films:
     year: 2026
     imdb_id: "tt9999999"
     editions: "theatrical:110"
+  - title: "Star Wars: Episode IV - A New Hope"
+    aliases: "A New Hope|Star Wars"
+    year: 1977
+    imdb_id: "tt0076759"
+    editions: "theatrical:121"
 EOF
 
 echo "== lookup by imdb_id =="
