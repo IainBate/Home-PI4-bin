@@ -30,7 +30,7 @@ films:
     imdb_id: "tt0086190"
     editions: "theatrical:131"
   - title: "The Lord of the Rings: The Fellowship of the Ring"
-    aliases: "Fellowship of the Ring"
+    aliases: "Fellowship of the Ring|Fellowship of the Rings"
     year: 2001
     imdb_id: "tt0120737"
     editions: "theatrical:178,extended:228"
