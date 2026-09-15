@@ -18,6 +18,7 @@ APPLY_LOG="${APPLY_LOG:-/home/pi/logs/forced_subs_apply_logfile}"
 SCAN_LOG="${SCAN_LOG:-/home/pi/logs/forced_subs_scan_logfile}"
 SCAN_CACHE="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
 REPORT_FILE="${FORCED_SUBS_REPORT_FILE:-$FILMS_ROOT/_FORCED_SUBTITLES_REPORT.txt}"
+LOCKFILE="${FORCED_SUBS_LOCKFILE:-/tmp/forced_subs.lock}"
 export FID_CACHE UNAVAILABLE_CACHE SCAN_CACHE
 
 # shellcheck source=lib/forced_subs_common.sh
