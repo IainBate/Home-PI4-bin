@@ -62,8 +62,12 @@ check_english_forced_sub() {
         return 0
     fi
 
-    # Alternative pattern matching
-    if echo "$stream_info" | grep -E "Stream #0:[0-9]+\(eng\): Subtitle:.*forced" > /dev/null; then
+    # Alternative pattern matching. The optional [0x..] group handles mp4/mov
+    # containers: ffmpeg's dump shows a bracketed track-id between the stream
+    # index and the language tag there (e.g. "Stream #0:2[0x3](eng):"),
+    # which mkv/srt streams never have (confirmed on both ffmpeg 7.1.5 and
+    # 9.0.1 - this isn't a version-specific quirk, mp4 has always shown it).
+    if echo "$stream_info" | grep -E "Stream #0:[0-9]+(\[0x[0-9a-fA-F]+\])?\(eng\): Subtitle:.*forced" > /dev/null; then
         return 0
     fi
 
