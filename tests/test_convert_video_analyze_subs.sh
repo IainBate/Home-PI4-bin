@@ -106,6 +106,20 @@ echo "== analyze mode exits 0 =="
 run_analyze "$WORK/no_subs/no_subs.mkv" >/dev/null
 assert_eq "exit code 0" "0" "$?"
 
+echo "== ffmpeg does not treat an inherited pipe as an interactive control channel =="
+# Regression test: without </dev/null on the internal ffmpeg -i call,
+# ffmpeg reads an inherited stdin pipe as interactive commands and prints
+# "Enter command: ..." / "Parse error, ..." for each line it can't parse -
+# this actually happened in production, where forced_subs's cmd_scan runs
+# this in a nested `while read ... done < <(...)` process substitution and
+# real data was flowing through the inherited pipe. Piping real text
+# through stdin here reproduces that shape without needing the full
+# nested-loop setup.
+out=$(printf 'line one\nline two\nline three\n' | run_analyze "$WORK/no_subs/no_subs.mkv")
+assert_eq "no ffmpeg interactive-mode prompt in the output" "no" \
+    "$([[ "$out" == *"Enter command"* ]] && echo yes || echo no)"
+assert_contains "analysis still completes normally with stdin occupied" "$out" "FORCED=0"
+
 echo "== --no-subs skips subtitle analysis entirely, even when subtitles are present =="
 
 NSDIR="$(mktemp -d)"
