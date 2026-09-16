@@ -61,6 +61,10 @@ ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/low.srt" -map 0:v -map 0:a -map 1:s -c:v
 ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/external_srt/external_srt.mkv" -hide_banner -loglevel error
 cp "$WORK/high.srt" "$WORK/external_srt/external_srt.srt"
 
+# forced English subtitle covering ~1% of the 10s runtime
+ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/realistic.srt" -map 0:v -map 0:a -map 1:s -c:v copy -c:a copy -c:s srt \
+    -metadata:s:s:0 language=eng -disposition:s:0 forced "$WORK/realistic_coverage/realistic_coverage.mkv" -hide_banner -loglevel error
+
 # forced English subtitle in an mp4/mov_text container (not mkv/srt like the
 # other fixtures above): ffmpeg's dump shows a bracketed track-id here
 # ("Stream #0:2[0x3](eng):") that mkv never has - this fixture exists
