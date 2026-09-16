@@ -33,6 +33,19 @@ cat > "$WORK/low.srt" <<'EOF'
 Hola
 EOF
 
+# ~1% of the 10s runtime - realistic for genuine forced-subtitle content
+# (a handful of foreign-language lines in an otherwise-English film is
+# typically well under 10% of the runtime, not the 15-50% this suite's
+# other fixtures use). This is the specific value that exposed a real bc
+# bug: `(a / b) * 100` at `scale=1` truncates the tiny intermediate
+# division result to "0.0" *before* the multiplication ever happens, so
+# any genuine coverage under ~10% silently computed as exactly 0.
+cat > "$WORK/realistic.srt" <<'EOF'
+1
+00:00:00,000 --> 00:00:00,100
+Hola
+EOF
+
 # no embedded subtitle at all, no sibling .srt
 ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/no_subs/no_subs.mkv" -hide_banner -loglevel error
 
