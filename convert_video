@@ -154,7 +154,20 @@ analyze_subtitles() {
             done
 
             if [[ -n "$VIDEO_DURATION" && "$VIDEO_DURATION" != "0" ]]; then
-                FORCED_COVERAGE_PCT=$(echo "scale=1; ($TOTAL_FORCED_DURATION / $VIDEO_DURATION) * 100" | bc 2>/dev/null || echo "0")
+                # Multiply before dividing: bc's `scale` limits the
+                # precision of the division result itself, not just the
+                # final answer, so `(a / b) * 100` computes the tiny
+                # intermediate fraction first (e.g. 78.7/7484.7 = 0.0105)
+                # and truncates IT to `scale` digits before the *100 ever
+                # happens - at scale=1 that's "0.0", so *100 gives exactly
+                # 0 for any real-world forced-subtitle coverage below
+                # ~10% (the normal case: forced tracks cover only the
+                # foreign-language lines, rarely more than a few minutes
+                # of a full-length film). `(a * 100) / b` divides a
+                # number that's already the right order of magnitude, so
+                # `scale` limits precision on the actually-meaningful
+                # result instead of zeroing it out first.
+                FORCED_COVERAGE_PCT=$(echo "scale=1; ($TOTAL_FORCED_DURATION * 100) / $VIDEO_DURATION" | bc 2>/dev/null || echo "0")
             fi
 
             # Round to integer for display
