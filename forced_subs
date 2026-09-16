@@ -290,6 +290,26 @@ remux_forced_subtitle() {
         trap - RETURN
         return 1
     fi
+
+    # A stream can be flagged "forced" with essentially no actual timed
+    # content (a bad/near-empty subtitle match) - cmd_scan's own
+    # has_real_forced check requires >=15% coverage before it will ever
+    # call a file HAS_FORCED (see convert_video's check_english_forced_sub
+    # threshold), so accepting anything less here as "success" would leave
+    # the file endlessly re-selected as a NEEDS_FORCED_KNOWN candidate on
+    # every future run - silently burning a real, rate-limited download
+    # credit each time with no way to ever actually finish. Requiring the
+    # same threshold here, before the swap, is what makes apply's success
+    # and scan's HAS_FORCED agree.
+    local video_duration coverage_pct
+    video_duration=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$tmp_out" 2>/dev/null)
+    coverage_pct=$(srt_coverage_percent "$srt" "$video_duration")
+    if ! awk -v c="$coverage_pct" 'BEGIN{exit !(c>=15)}'; then
+        rm -f "$tmp_out"
+        trap - RETURN
+        return 1
+    fi
+
     mv "$tmp_out" "$file"
     trap - RETURN
 }
