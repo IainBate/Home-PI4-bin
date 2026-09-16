@@ -372,7 +372,7 @@ echo "New file names: ${new_filename_iPad} ${new_filename_HD} ${new_filename}"
 
 target_bitrate=2000
 # Just to keep it similar to original script's behavior of showing info
-ffmpeg -i "$filename" 2>&1 | grep -E "Duration|bitrate" || true
+ffmpeg -i "$filename" 2>&1 </dev/null | grep -E "Duration|bitrate" || true
 echo "Target bitrate: ${target_bitrate}k"
 
 # --- Subtitle Processing (analysis functions now live near the top of the
