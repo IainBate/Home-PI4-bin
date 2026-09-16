@@ -106,19 +106,24 @@ echo "== analyze mode exits 0 =="
 run_analyze "$WORK/no_subs/no_subs.mkv" >/dev/null
 assert_eq "exit code 0" "0" "$?"
 
-echo "== ffmpeg does not treat an inherited pipe as an interactive control channel =="
-# Regression test: without </dev/null on the internal ffmpeg -i call,
-# ffmpeg reads an inherited stdin pipe as interactive commands and prints
-# "Enter command: ..." / "Parse error, ..." for each line it can't parse -
-# this actually happened in production, where forced_subs's cmd_scan runs
-# this in a nested `while read ... done < <(...)` process substitution and
-# real data was flowing through the inherited pipe. Piping real text
-# through stdin here reproduces that shape without needing the full
-# nested-loop setup.
-out=$(printf 'line one\nline two\nline three\n' | run_analyze "$WORK/no_subs/no_subs.mkv")
-assert_eq "no ffmpeg interactive-mode prompt in the output" "no" \
-    "$([[ "$out" == *"Enter command"* ]] && echo yes || echo no)"
-assert_contains "analysis still completes normally with stdin occupied" "$out" "FORCED=0"
+echo "== ffmpeg's stdin is protected from being read as interactive commands =="
+# Regression test for a real production incident: without </dev/null on an
+# ffmpeg call, ffmpeg treats an inherited stdin pipe as an interactive
+# control channel and reads from it, printing "Enter command: ..." /
+# "Parse error, ..." for each line it can't parse. This actually happened
+# when forced_subs's cmd_scan/cmd_apply ran ffmpeg nested inside a
+# `while read ... done < <(...)` process substitution - the long-running
+# remux call had a real window to poll stdin mid-operation and stole data
+# meant for the read loop, corrupting both. That race can't be reproduced
+# reliably in a fast unit test (a quick synthetic fixture remuxes almost
+# instantly, however it's invoked), so this checks statically that every
+# ffmpeg invocation in this codebase - the actual, permanent guarantee -
+# redirects stdin away from whatever it would otherwise inherit.
+while IFS=: read -r ffmpeg_file ffmpeg_line; do
+    assert_contains "$ffmpeg_file:$ffmpeg_line protects ffmpeg's stdin (</dev/null or -nostdin)" \
+        "$(sed -n "${ffmpeg_line}p" "$ffmpeg_file")" "/dev/null"
+done < <(grep -rn '^\s*ffmpeg \|[^_]ffmpeg -i' "$REPO_ROOT/convert_video" "$REPO_ROOT/forced_subs" \
+    | grep -v '</dev/null\|-nostdin\|^\s*#' | cut -d: -f1,2)
 
 echo "== --no-subs skips subtitle analysis entirely, even when subtitles are present =="
 
