@@ -120,18 +120,17 @@ echo "== ffmpeg's stdin is protected from being read as interactive commands =="
 # ffmpeg invocation in this codebase - the actual, permanent guarantee -
 # redirects stdin away from whatever it would otherwise inherit.
 unprotected=""
-while IFS=: read -r ffmpeg_file ffmpeg_line; do
+while IFS=: read -r ffmpeg_file ffmpeg_line _; do
+    [[ "$ffmpeg_file" == "" ]] && continue
     # A real ffmpeg invocation can span several backslash-continuation
     # lines, with the protecting redirect on a later line than the match
     # itself (e.g. forced_subs's remux call) - check a window after the
     # match, not just the matched line.
     window=$(sed -n "${ffmpeg_line},$((ffmpeg_line + 6))p" "$ffmpeg_file")
     if [[ "$window" != *"/dev/null"* && "$window" != *"-nostdin"* ]]; then
-        unprotected="${unprotected}${ffmpeg_file}:${ffmpeg_line}\n"
+        unprotected="${unprotected}${ffmpeg_file}:${ffmpeg_line} "
     fi
-done < <(grep -n 'ffmpeg -i\|ffmpeg -y' "$REPO_ROOT/convert_video" "$REPO_ROOT/forced_subs" \
-    | grep -v '^[0-9]*:\s*#' | sed "s|^|$REPO_ROOT/convert_video:|; s|:.*ffmpeg -y -i \"\$file\" -i \"\$srt\"|FORCEDSUBSMARK|" \
-    | awk -F: -v cv="$REPO_ROOT/convert_video" -v fs="$REPO_ROOT/forced_subs" '{print}')
+done < <(grep -rn 'ffmpeg -i\|ffmpeg -y' "$REPO_ROOT/convert_video" "$REPO_ROOT/forced_subs" | grep -v ':\s*#')
 assert_eq "every ffmpeg invocation in convert_video/forced_subs protects its stdin" "" "$unprotected"
 
 echo "== --no-subs skips subtitle analysis entirely, even when subtitles are present =="
