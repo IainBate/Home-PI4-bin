@@ -172,8 +172,19 @@ cmd_scan() {
         coverage=$(printf '%s' "$analyze" | grep -oE 'COVERAGE=[0-9.]+' | cut -d= -f2)
         external=$(printf '%s' "$analyze" | grep -oE 'EXTERNAL_SRT=[0-9]+' | cut -d= -f2)
 
+        # >0, not a higher floor like 15%: genuine forced-subtitle content
+        # covers only the foreign-language lines in an otherwise-English
+        # film, typically well under 10% of the runtime - a real match is
+        # usually a small percentage, not a large one. (The >=15% floor
+        # this replaced was inherited from convert_video's own coverage
+        # calculation, which had a real bug of its own - see the note in
+        # convert_video's analyze_subtitles - that made any genuine
+        # sub-~10% coverage compute as exactly 0 regardless of the fix
+        # here; both needed correcting together.) A mislabeled *full*
+        # dialogue track would show up around 60-100%, so >0 alone doesn't
+        # risk conflating the two.
         local has_real_forced=false
-        if [ "${forced:-0}" = "1" ] && awk -v c="${coverage:-0}" 'BEGIN{exit !(c>=15)}'; then
+        if [ "${forced:-0}" = "1" ] && awk -v c="${coverage:-0}" 'BEGIN{exit !(c>0)}'; then
             has_real_forced=true
         fi
 
