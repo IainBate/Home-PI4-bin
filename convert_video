@@ -80,8 +80,13 @@ analyze_subtitles() {
 
     echo "Analyzing subtitles..."
 
-    # Get all subtitle streams info
-    SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1)
+    # Get all subtitle streams info. </dev/null is required: without it,
+    # ffmpeg treats an inherited pipe as an interactive control channel and
+    # tries to read commands from it - when this runs inside a caller's
+    # `while read ... done < <(...)` process substitution (as forced_subs's
+    # cmd_scan does, for every file), ffmpeg competes with that read loop
+    # for the same pipe data, corrupting both.
+    SUBTITLE_INFO=$(ffmpeg -i "$filename" 2>&1 </dev/null)
 
     FORCED_ENG_SUBS=()
     ALL_SUB_STREAMS=()
