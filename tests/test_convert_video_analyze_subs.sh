@@ -101,6 +101,17 @@ assert_eq "low_coverage: reports a non-empty coverage value" "no" "$([[ -z "$cov
 result=$(awk -v c="${coverage:-999}" 'BEGIN { print (c < 15) ? "yes" : "no" }')
 assert_eq "low_coverage: coverage < 15%" "yes" "$result"
 
+echo "== realistic (~1%) coverage is computed correctly, not zeroed by bc precision loss =="
+out=$(run_analyze "$WORK/realistic_coverage/realistic_coverage.mkv")
+assert_contains "realistic_coverage: reports FORCED=1" "$out" "FORCED=1"
+coverage=$(echo "$out" | grep -oE 'COVERAGE=[0-9.]+' | cut -d= -f2)
+# The old (a/b)*100 formula truncated this exact scenario to exactly "0" -
+# checking the actual number (not just "< 15" or "> 0", either of which
+# the old broken formula would also have satisfied by accident) is what
+# actually catches this regression.
+result=$(awk -v c="${coverage:-0}" 'BEGIN { print (c >= 0.5 && c <= 2) ? "yes" : "no" }')
+assert_eq "realistic_coverage: coverage is ~1% (0.5-2%), not truncated to 0" "yes" "$result"
+
 echo "== external srt sidecar, no embedded subs =="
 out=$(run_analyze "$WORK/external_srt/external_srt.mkv")
 assert_contains "external_srt: reports FORCED=0" "$out" "FORCED=0"
