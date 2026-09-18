@@ -92,13 +92,12 @@ assert_contains "has the needs-a-decision section" "$out" "Needs forced subtitle
 echo "== the previously-applied file appears under added-by-script =="
 assert_contains "Phantom Menace listed as added" "$out" "Phantom Menace.mp4"
 
-echo "== curated films apply couldn't fetch a subtitle for are listed with their reason =="
-assert_contains "has the curated-but-unfetched subsection" "$out" "Curated, but no matching subtitle could be fetched automatically"
+echo "== identified films apply couldn't fetch a subtitle for are listed with their reason =="
+assert_contains "has the identified-but-unfetched subsection" "$out" "Identified, but no matching subtitle could be fetched automatically"
 assert_contains "Some Curated Film listed with its unavailable-cache reason" "$out" "$(printf '%s' "$WORK/films/Curated/Some Curated Film.mp4 (no_match_found)")"
 
-echo "== identified films missing from the curated list are listed with their resolved title =="
-assert_contains "has the not-yet-curated subsection" "$out" "not yet in the curated list"
-assert_contains "Some Uncurated Film listed with its resolved title" "$out" "$(printf '%s' "$WORK/films/NotCurated/Some Uncurated Film.mp4 -> Some Uncurated Film")"
+echo "== an identified film with no curated entry at all is listed the same way (curation no longer gates fetching) =="
+assert_contains "Some Uncurated Film listed alongside curated ones" "$out" "$(printf '%s' "$WORK/films/NotCurated/Some Uncurated Film.mp4 (no_match_found)")"
 
 echo "== a filename matching multiple curated titles/years is listed for disambiguation =="
 assert_contains "has the ambiguous-year subsection" "$out" "needs disambiguation"
