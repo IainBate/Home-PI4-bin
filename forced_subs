@@ -131,6 +131,12 @@ cmd_identify() {
 # 3-minute tolerance, or "unmatched_edition".
 pick_edition() {
     local file="$1" editions="$2"
+    # An empty editions string is now routine (any resolved-but-uncurated
+    # film reaches here with no curated edition data at all) - bail before
+    # the array split below, which under `set -u` treats a fully-empty
+    # herestring as leaving "parts" undeclared rather than a one-element
+    # empty array, and "${parts[@]}" on that is an unbound-variable error.
+    [ -z "$editions" ] && { echo "unmatched_edition"; return; }
     local duration_min
     duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
     local best="" best_diff=999999
