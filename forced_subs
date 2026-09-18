@@ -542,16 +542,54 @@ report_body() {
         awk -F'\t' '$3=="success" {print "  " $2}' "$APPLY_LOG" | sort -u
     fi
 
+    # Split what used to be one flat "sort these out yourself" dump into
+    # sections by what action each one actually needs, instead of lumping
+    # curated near-misses in with thousands of TV episodes that were never
+    # identifiable as films at all (see forced_subs_identify_one and
+    # cmd_scan's NEEDS_FORCED_UNKNOWN reasons for where each of these
+    # reason codes comes from).
     echo ""
-    echo "=== You'll need to sort these out yourself ==="
-    printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" {print "  " $2 " (" $8 ")"}'
-    printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_KNOWN"' | while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
+    echo "=== Needs forced subtitles - you decide what to do ==="
+
+    local curated_unfetched
+    curated_unfetched=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_KNOWN"' | while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
         if unavailable_cache_is_fresh "$file"; then
             local r
             r=$(awk -F'\t' -v p="$file" '$1==p {v=$2} END{print v}' "$UNAVAILABLE_CACHE")
             echo "  $file ($r)"
         fi
-    done
+    done)
+    if [ -n "$curated_unfetched" ]; then
+        echo ""
+        echo "-- Curated, but no matching subtitle could be fetched automatically --"
+        printf '%s\n' "$curated_unfetched"
+    fi
+
+    local not_curated
+    not_curated=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" && $8=="not_on_known_list" {
+        t = ($4 == "") ? "unidentified title" : $4
+        print "  " $2 " -> " t
+    }')
+    if [ -n "$not_curated" ]; then
+        echo ""
+        echo "-- Identified, but not yet in the curated list (add to forced_subs_known_films.yaml) --"
+        printf '%s\n' "$not_curated"
+    fi
+
+    local ambiguous_year
+    ambiguous_year=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" && $8=="ambiguous_title_multiple_years" {print "  " $2}')
+    if [ -n "$ambiguous_year" ]; then
+        echo ""
+        echo "-- Multiple curated titles/years match this filename - needs disambiguation (forced_subs identify --set) --"
+        printf '%s\n' "$ambiguous_year"
+    fi
+
+    local unidentified_count
+    unidentified_count=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" && $8=="no_match"' | wc -l | tr -d ' ')
+    if [ "$unidentified_count" -gt 0 ]; then
+        echo ""
+        echo "$unidentified_count file(s) have no confident film match at all (mostly TV episodes, or films not yet worth curating) - not shown individually."
+    fi
 }
 
 cmd_report() {
