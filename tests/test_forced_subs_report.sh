@@ -8,7 +8,8 @@ FORCED_SUBS="$REPO_ROOT/forced_subs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/lib" "$WORK/films/Star Wars"
+mkdir -p "$WORK/lib" "$WORK/films/Star Wars" "$WORK/films/Curated" \
+    "$WORK/films/NotCurated" "$WORK/films/MoanaCollision"
 cp "$REPO_ROOT/lib/forced_subs_common.sh" "$REPO_ROOT/lib/known_films.py" "$WORK/lib/"
 cat > "$WORK/lib/ost.py" <<'PYEOF'
 import sys
@@ -23,12 +24,28 @@ films:
     year: 1999
     imdb_id: "tt0120915"
     editions: "theatrical:0"
+  - title: "Some Curated Film"
+    aliases: ""
+    year: 2021
+    imdb_id: "tt2222222"
+    editions: "theatrical:0"
+  - title: "Moana"
+    aliases: ""
+    year: 2016
+    imdb_id: "tt3521164"
+    editions: "theatrical:0"
+  - title: "Moana"
+    aliases: ""
+    year: 2026
+    imdb_id: "tt9999999"
+    editions: "theatrical:0"
 EOF
 
-ffmpeg -y -f lavfi -i testsrc=duration=3:size=320x180:rate=10 -f lavfi -i sine=duration=3 \
-    -pix_fmt yuv420p "$WORK/films/Star Wars/Phantom Menace.mp4" -hide_banner -loglevel error
-ffmpeg -y -f lavfi -i testsrc=duration=3:size=320x180:rate=10 -f lavfi -i sine=duration=3 \
-    -pix_fmt yuv420p "$WORK/films/Star Wars/Unmatched Obscure Film (2015).mp4" -hide_banner -loglevel error
+for f in "Star Wars/Phantom Menace.mp4" "Star Wars/Unmatched Obscure Film (2015).mp4" \
+    "Curated/Some Curated Film.mp4" "NotCurated/Some Uncurated Film.mp4" "MoanaCollision/Moana.mp4"; do
+    ffmpeg -y -f lavfi -i testsrc=duration=3:size=320x180:rate=10 -f lavfi -i sine=duration=3 \
+        -pix_fmt yuv420p "$WORK/films/$f" -hide_banner -loglevel error
+done
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
@@ -45,18 +62,53 @@ export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test
 # Simulate a prior apply run: Phantom Menace was already fixed.
 printf '2026-09-14T00:00:00Z\t%s\tsuccess\tremuxed\n' "$WORK/films/Star Wars/Phantom Menace.mp4" > "$APPLY_LOG"
 
+# "Some Curated Film" is already identified (manual, sticky) and on the
+# curated list, but apply couldn't fetch a matching subtitle for it -
+# a fresh unavailable_cache entry, as apply itself would leave behind.
+printf '%s\ttt2222222\tSome Curated Film\t2021\tmanual\t\t2026-01-01\n' \
+    "$WORK/films/Curated/Some Curated Film.mp4" >> "$FID_CACHE"
+printf '%s\tno_match_found\t%s\n' "$WORK/films/Curated/Some Curated Film.mp4" "$(date -I)" > "$UNAVAILABLE_CACHE"
+
+# "Some Uncurated Film" is already identified (manual) but its imdb_id has
+# no entry anywhere in films.yaml - a real, named film that just hasn't
+# been curated yet.
+printf '%s\ttt5555555\tSome Uncurated Film\t2022\tmanual\t\t2026-01-01\n' \
+    "$WORK/films/NotCurated/Some Uncurated Film.mp4" >> "$FID_CACHE"
+
+# "MoanaCollision/Moana.mp4" is deliberately NOT pre-identified - scan
+# will run identify on it automatically, the hash stub returns nothing,
+# and the filename-based fallback finds both curated Moana entries with
+# no year to disambiguate by (see forced_subs_identify_one).
+
 out=$("$FORCED_SUBS" report)
 
-echo "== three sections are present =="
+echo "== four sections are present =="
 assert_contains "has the already-fine section" "$out" "Already fine"
 assert_contains "has the added-by-script section" "$out" "Added by this script"
-assert_contains "has the manual-attention section" "$out" "sort these out yourself"
+assert_contains "has the needs-a-decision section" "$out" "Needs forced subtitles - you decide what to do"
 
 echo "== the previously-applied file appears under added-by-script =="
 assert_contains "Phantom Menace listed as added" "$out" "Phantom Menace.mp4"
 
-echo "== the unmatched obscure film appears under manual attention =="
-assert_contains "Unmatched Obscure Film listed for manual attention" "$out" "Unmatched Obscure Film"
+echo "== curated films apply couldn't fetch a subtitle for are listed with their reason =="
+assert_contains "has the curated-but-unfetched subsection" "$out" "Curated, but no matching subtitle could be fetched automatically"
+assert_contains "Some Curated Film listed with its unavailable-cache reason" "$out" "$(printf '%s' "$WORK/films/Curated/Some Curated Film.mp4 (no_match_found)")"
+
+echo "== identified films missing from the curated list are listed with their resolved title =="
+assert_contains "has the not-yet-curated subsection" "$out" "not yet in the curated list"
+assert_contains "Some Uncurated Film listed with its resolved title" "$out" "$(printf '%s' "$WORK/films/NotCurated/Some Uncurated Film.mp4 -> Some Uncurated Film")"
+
+echo "== a filename matching multiple curated titles/years is listed for disambiguation =="
+assert_contains "has the ambiguous-year subsection" "$out" "needs disambiguation"
+assert_contains "Moana collision file listed" "$out" "MoanaCollision/Moana.mp4"
+
+echo "== files with no confident film match at all are only counted, not listed individually =="
+assert_contains "has a no-confident-match count line" "$out" "file(s) have no confident film match at all"
+if [[ "$out" == *"Unmatched Obscure Film"* ]]; then
+    fail "Unmatched Obscure Film should be summarized by count, not listed by name (it's not a curated/identified film)"
+else
+    pass "Unmatched Obscure Film is not listed individually"
+fi
 
 echo "== the report is also written to REPORT_FILE (a log location, not the films root) =="
 assert_file_exists "report file written to REPORT_FILE" "$WORK/logs/forced_subs_report.txt"
