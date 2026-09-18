@@ -70,10 +70,12 @@ printf '%s\ttt2222222\tSome Curated Film\t2021\tmanual\t\t2026-01-01\n' \
 printf '%s\tno_match_found\t%s\n' "$WORK/films/Curated/Some Curated Film.mp4" "$(date -I)" > "$UNAVAILABLE_CACHE"
 
 # "Some Uncurated Film" is already identified (manual) but its imdb_id has
-# no entry anywhere in films.yaml - a real, named film that just hasn't
-# been curated yet.
+# no entry anywhere in films.yaml. Since any resolved film is now eligible
+# for fetching regardless of curation, apply already tried and failed for
+# it too - a fresh unavailable_cache entry, same shape as the curated case.
 printf '%s\ttt5555555\tSome Uncurated Film\t2022\tmanual\t\t2026-01-01\n' \
     "$WORK/films/NotCurated/Some Uncurated Film.mp4" >> "$FID_CACHE"
+printf '%s\tno_match_found\t%s\n' "$WORK/films/NotCurated/Some Uncurated Film.mp4" "$(date -I)" >> "$UNAVAILABLE_CACHE"
 
 # "MoanaCollision/Moana.mp4" is deliberately NOT pre-identified - scan
 # will run identify on it automatically, the hash stub returns nothing,
