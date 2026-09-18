@@ -8,12 +8,16 @@ FORCED_SUBS="$REPO_ROOT/forced_subs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/lib" "$WORK/films/Star Wars" "$WORK/films/Unmatched"
+mkdir -p "$WORK/lib" "$WORK/films/Star Wars" "$WORK/films/Unmatched" "$WORK/films/TitleSearch"
 cp "$REPO_ROOT/lib/forced_subs_common.sh" "$REPO_ROOT/lib/known_films.py" "$WORK/lib/"
 cat > "$WORK/lib/ost.py" <<'PYEOF'
 import sys
-if sys.argv[1] == "hash":
+cmd = sys.argv[1]
+if cmd == "hash":
     print("0000000000000000")
+elif cmd == "search_by_title":
+    if sys.argv[2] == "Uncurated Resolvable Film":
+        print("tt7777777\tUncurated Resolvable Film\t2024")
 PYEOF
 
 cat > "$WORK/films.yaml" <<'EOF'
