@@ -52,6 +52,39 @@ imdb_tt_to_numeric() {
     printf '%s' "${1#tt}" | sed 's/^0*//'
 }
 
+# Shared by forced_subs and convert_video - both read the same
+# secrets.yaml/opensubtitles credentials and talk to the same OpenSubtitles
+# account, so neither should have its own copy of this. load_opensubtitles_creds
+# never fails on its own (callers that need real credentials check for
+# empty values, or use opensubtitles_login below which does that check).
+load_opensubtitles_creds() {
+    local secrets_yaml="$1"
+    OST_API_KEY=$(yaml_get_2level "$secrets_yaml" opensubtitles api_key)
+    OST_USERNAME=$(yaml_get_2level "$secrets_yaml" opensubtitles username)
+    OST_PASSWORD=$(yaml_get_2level "$secrets_yaml" opensubtitles password)
+    OST_USER_AGENT="forced_subs v1.0.0"
+    export OST_API_KEY OST_USERNAME OST_PASSWORD OST_USER_AGENT
+}
+
+# Returns 1 (does not exit the caller's process - this is a library
+# function, shared by a batch script and an interactive one with very
+# different failure-handling needs) if credentials are missing or login
+# fails; prints an explanatory message to stderr either way.
+opensubtitles_login() {
+    local secrets_yaml="$1" libdir="$2"
+    load_opensubtitles_creds "$secrets_yaml"
+    if [ -z "$OST_API_KEY" ] || [ -z "$OST_USERNAME" ] || [ -z "$OST_PASSWORD" ]; then
+        echo "ERROR: OpenSubtitles credentials missing from $secrets_yaml (opensubtitles.api_key/username/password)." >&2
+        return 1
+    fi
+    OST_TOKEN=$(python3 "$libdir/ost.py" login)
+    if [ -z "$OST_TOKEN" ]; then
+        echo "ERROR: OpenSubtitles login failed - check credentials/network." >&2
+        return 1
+    fi
+    export OST_TOKEN
+}
+
 # Checks a subtitle search result's release-name string against a
 # resolved curated edition name (e.g. "extended", "theatrical") for an
 # EXPLICIT conflict, using a small closed vocabulary of English edition-
