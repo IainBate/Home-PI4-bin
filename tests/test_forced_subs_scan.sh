@@ -70,6 +70,16 @@ line=$(printf '%s\n' "$out" | grep "Some Random Film")
 assert_contains "bucketed NEEDS_FORCED_UNKNOWN" "$line" "NEEDS_FORCED_UNKNOWN"
 assert_contains "reason is no_match" "$line" "no_match"
 
+echo "== NEEDS_FORCED_KNOWN for a film resolved via title-search alone, with no curated entry at all =="
+# known_films.yaml's role has narrowed to supplying edition-safety data
+# for titles with real multiple cuts, not gating whether a film gets
+# attempted at all - any resolved imdb_id (from any identify tier) is
+# now eligible, so this un-curated film still buckets as NEEDS_FORCED_KNOWN.
+line=$(printf '%s\n' "$out" | grep "Uncurated Resolvable Film")
+assert_contains "bucketed NEEDS_FORCED_KNOWN despite no curated entry" "$line" "NEEDS_FORCED_KNOWN"
+assert_contains "carries the title-search-resolved imdb_id" "$line" "tt7777777"
+assert_contains "edition is unmatched (no curated edition data exists)" "$line" "unmatched_edition"
+
 echo "== scan also appends to SCAN_LOG =="
 assert_file_exists "scan log was written" "$SCAN_LOG"
 
