@@ -294,33 +294,6 @@ srt_coverage_percent() {
     ' "$srt_file"
 }
 
-# Checks a subtitle search result's release-name string against a
-# resolved curated edition name (e.g. "extended", "theatrical") for an
-# EXPLICIT conflict, using a small closed vocabulary of English edition-
-# distinguishing terms rather than the video's own duration: a forced-
-# subtitle track only covers foreign-language dialogue scenes, so its
-# last cue can legitimately sit long before the credits even for a
-# correctly-matched candidate (proven directly against a real
-# OpenSubtitles response for The Fellowship of the Ring's extended cut,
-# whose last forced cue lands 46 minutes before the film's actual end -
-# a naive "last cue vs video duration" comparison rejected that exact,
-# correctly-labelled ("...[Extended]...") candidate). Deliberately NOT
-# derived from the curated YAML edition names themselves, which
-# sometimes mix in unrelated source-format tokens (e.g. "2011_bluray")
-# that would false-positive against an ordinary BluRay-sourced release
-# regardless of its actual cut. Prints "1" (conflict - do not trust this
-# candidate) if the release name contains one of these terms other than
-# the one already established for this file; "0" otherwise.
-edition_label_conflict() {
-    local resolved_lc release_lc kw
-    resolved_lc=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
-    release_lc=$(printf '%s' "$2" | tr '[:upper:]' '[:lower:]')
-    for kw in extended director unrated theatrical; do
-        case "$resolved_lc" in *"$kw"*) continue ;; esac
-        case "$release_lc" in *"$kw"*) echo "1"; return ;; esac
-    done
-    echo "0"
-}
 
 remux_forced_subtitle() {
     local file="$1" srt="$2"
