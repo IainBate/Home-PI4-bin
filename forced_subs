@@ -477,6 +477,30 @@ cmd_apply() {
                 rm -f "$srt_path"
                 continue
             fi
+
+            # This candidate came from the runtime-unfiltered IMDb fallback
+            # (never the hash path, which is already edition-exact) - for a
+            # multi-edition title, confirm its own last-cue timestamp lines
+            # up with this file's actual duration before trusting it. Real
+            # curated edition gaps run 13+ minutes apart, so a 5-minute
+            # tolerance can't confuse them while still tolerating minor
+            # authoring slack (e.g. missing trailing-credits cues).
+            if [ "$edition_count" -gt 1 ]; then
+                local video_duration_min srt_duration_min duration_diff
+                video_duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
+                srt_duration_min=$(srt_last_cue_minutes "$srt_path")
+                if [ "$srt_duration_min" -lt 0 ]; then
+                    duration_diff=999
+                else
+                    duration_diff=$(( video_duration_min > srt_duration_min ? video_duration_min - srt_duration_min : srt_duration_min - video_duration_min ))
+                fi
+                if [ "$duration_diff" -gt 5 ]; then
+                    unavailable_cache_set "$file" "ambiguous"
+                    log_apply "$file" "unavailable" "ambiguous"
+                    rm -f "$srt_path"
+                    continue
+                fi
+            fi
         fi
 
         if [ -n "$srt_path" ] && remux_forced_subtitle "$file" "$srt_path"; then
