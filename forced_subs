@@ -260,6 +260,29 @@ srt_coverage_percent() {
     ' "$srt_file"
 }
 
+# Returns the SRT's last subtitle cue end-timestamp, in whole minutes.
+# Used to sanity-check a runtime-unfiltered subtitle search result
+# against the actual video file before trusting it - see cmd_apply's
+# multi-edition handling below. Returns -1 if the file is missing or
+# has no parseable cues, which never matches any real duration.
+srt_last_cue_minutes() {
+    local srt_file="$1"
+    [ -f "$srt_file" ] || { echo "-1"; return; }
+    awk -F' --> ' '
+        function to_seconds(t,   h, m, s) {
+            gsub(",", ".", t)
+            split(t, parts, ":")
+            h = parts[1]; m = parts[2]; s = parts[3]
+            return h * 3600 + m * 60 + s
+        }
+        /-->/ {
+            end = to_seconds($2)
+            if (end > max) max = end
+        }
+        END { print (max > 0) ? int(max / 60) : -1 }
+    ' "$srt_file"
+}
+
 remux_forced_subtitle() {
     local file="$1" srt="$2"
     local ext="${file##*.}"
