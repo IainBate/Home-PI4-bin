@@ -112,4 +112,12 @@ forced_flags=$(ffprobe -v error -select_streams s -show_entries stream_dispositi
 assert_contains "exactly one stream carries the forced disposition" "$forced_flags" "1"
 assert_contains "the other stream is not forced" "$forced_flags" "0"
 
+echo "== the file's original mtime survives the remux =="
+# Adding a subtitle track isn't a meaningful content change from the
+# user's point of view (media-server "recently added" sorting, backup
+# tooling, etc.) - remux_forced_subtitle carries the original mtime
+# forward via `touch -r` before the atomic swap.
+after_mtime=$(source "$WORK/lib/forced_subs_common.sh"; file_stat_signature "$FILE" | cut -d: -f2)
+assert_eq "mtime unchanged after remux" "$before_mtime" "$after_mtime"
+
 test_summary_and_exit
