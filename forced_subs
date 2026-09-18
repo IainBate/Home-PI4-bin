@@ -240,7 +240,7 @@ cmd_scan() {
         if [ "$has_real_forced" = "true" ]; then
             bucket="HAS_FORCED"
         else
-            if ! fid_cache_get_field "$file" confidence >/dev/null 2>&1; then
+            if [ "$rehash" = "true" ] || ! fid_cache_get_field "$file" confidence >/dev/null 2>&1; then
                 forced_subs_identify_one "$file"
             fi
             imdb_id=$(fid_cache_get_field "$file" imdb_id 2>/dev/null || true)
