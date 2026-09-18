@@ -205,6 +205,8 @@ def main():
         cmd_find_forced_by_hash(args[0])
     elif cmd == "find_forced_by_imdb":
         cmd_find_forced_by_imdb(args[0])
+    elif cmd == "search_by_title":
+        cmd_search_by_title(args[0], args[1] if len(args) > 1 else "")
     elif cmd == "download":
         cmd_download(args[0], args[1])
     else:
