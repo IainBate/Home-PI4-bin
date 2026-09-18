@@ -123,11 +123,16 @@ MAILTO="iain.bate@gmail.com"
 # gives every previously-unresolved/ambiguous title a fresh identify
 # attempt (including another shot at the title-search fallback, in case
 # OpenSubtitles' own catalogue has grown since). This is the expensive,
-# hours-long full-library pass - deliberately not a daily job. Scheduled
-# for the first Monday of the month (the 1-7 day-of-month range combined
-# with weekday Mon is the standard "first X of the month" cron idiom), an
-# hour after the weekly Monday reboot above so the HDD/network are settled.
-0 7 1-7 * Mon cd /home/pi/bin && ./forced_subs scan --rehash --quiet >>/home/pi/logs/forced_subs_scan_logfile 2>&1
+# hours-long full-library pass - deliberately not a daily job. An hour
+# after the weekly Monday reboot above so the HDD/network are settled.
+#
+# NOT `0 7 1-7 * Mon` - cron ORs day-of-month and day-of-week when both are
+# restricted (see `man 5 crontab`'s Note), so that would fire on every day
+# 1-7 of the month AND every Monday, not just the first Monday. Instead:
+# run every Monday (day-of-month left as `*`, so no OR ambiguity) and let
+# the command itself skip unless it's genuinely within the month's first
+# 7 days.
+0 7 * * Mon [ "$(date +\%d)" -le 7 ] && cd /home/pi/bin && ./forced_subs scan --rehash --quiet >>/home/pi/logs/forced_subs_scan_logfile 2>&1
 
 # The Pi reboots weekly (its own separate cron job) and identify's first
 # full-library pass can run long enough to still be mid-run when that
