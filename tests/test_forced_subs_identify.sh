@@ -8,12 +8,14 @@ FORCED_SUBS="$REPO_ROOT/forced_subs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/lib" "$WORK/films/Star Wars" "$WORK/films/Moana Films"
+mkdir -p "$WORK/lib" "$WORK/films/Star Wars" "$WORK/films/Moana Films" "$WORK/films/Other"
 cp "$REPO_ROOT/lib/forced_subs_common.sh" "$REPO_ROOT/lib/known_films.py" "$WORK/lib/"
 touch "$WORK/films/Star Wars/Phantom Menace.mp4"
 touch "$WORK/films/Moana Films/Moana - 2026.mp4"
 touch "$WORK/films/Moana Films/Moana - 2016.mp4"
 touch "$WORK/films/Moana Films/Moana.mp4"
+touch "$WORK/films/Other/Some Unlisted Film.mp4"
+touch "$WORK/films/Other/Totally Unresolvable Film.mp4"
 
 cat > "$WORK/films.yaml" <<'EOF'
 films:
