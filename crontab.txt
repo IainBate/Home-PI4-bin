@@ -109,9 +109,25 @@ MAILTO="iain.bate@gmail.com"
 # subtitle-scanner-design.md). identify is weekly - new films arrive rarely,
 # and already-cached files are skipped, so this only has to pick up what's
 # new since last time. apply is daily and rate-limited internally
-# (--max-downloads) to stay within the OpenSubtitles free-tier quota.
+# (--max-downloads) to stay within the OpenSubtitles free-tier quota; it's
+# cheap day-to-day because it calls scan internally, which now only
+# re-probes a file that's genuinely new/changed OR whose last check is
+# older than SCAN_FRESHNESS_DAYS (default 30) - see cmd_scan's freshness
+# check in forced_subs. A film stuck ambiguous/unfetched/unmatched isn't
+# going to resolve differently by re-checking it daily.
 0 4 * * Sun cd /home/pi/bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
 0 5 * * * cd /home/pi/bin && ./forced_subs apply --quiet
+
+# Monthly deep re-probe: `scan --rehash` bypasses the freshness check above
+# entirely (re-probing every non-HAS_FORCED file via convert_video) AND
+# gives every previously-unresolved/ambiguous title a fresh identify
+# attempt (including another shot at the title-search fallback, in case
+# OpenSubtitles' own catalogue has grown since). This is the expensive,
+# hours-long full-library pass - deliberately not a daily job. Scheduled
+# for the first Monday of the month (the 1-7 day-of-month range combined
+# with weekday Mon is the standard "first X of the month" cron idiom), an
+# hour after the weekly Monday reboot above so the HDD/network are settled.
+0 7 1-7 * Mon cd /home/pi/bin && ./forced_subs scan --rehash --quiet >>/home/pi/logs/forced_subs_scan_logfile 2>&1
 
 # The Pi reboots weekly (its own separate cron job) and identify's first
 # full-library pass can run long enough to still be mid-run when that
