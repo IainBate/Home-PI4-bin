@@ -68,7 +68,17 @@ forced_subs_identify_one() {
 
     local identified imdb_id title year confidence reason
     identified=$(identify_film_from_file "$file" "$LIBDIR" "$KNOWN_FILMS_YAML")
-    IFS=$'\t' read -r imdb_id title year confidence reason <<< "$identified"
+    # cut, not `read <<<` - bash's IFS word-splitting collapses consecutive
+    # tabs (one of its "IFS whitespace" characters) and strips them from
+    # the start of the string, silently dropping leading empty fields
+    # (imdb_id/title/year are all empty in the unresolved case, right
+    # before confidence/reason - read would shift those into the wrong
+    # variables).
+    imdb_id=$(printf '%s' "$identified" | cut -f1)
+    title=$(printf '%s' "$identified" | cut -f2)
+    year=$(printf '%s' "$identified" | cut -f3)
+    confidence=$(printf '%s' "$identified" | cut -f4)
+    reason=$(printf '%s' "$identified" | cut -f5)
     fid_cache_set "$file" "$imdb_id" "$title" "$year" "$confidence" "$reason" "$(date -I)"
 }
 
