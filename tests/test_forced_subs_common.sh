@@ -70,4 +70,31 @@ fid_cache_set "/mnt/HDD/films/Moana (2016).mp4" "tt3521164" "Moana" "2016" "manu
 assert_eq "a later set for the same path replaces the row, not appends" "1" "$(grep -c "Moana (2016)" "$FID_CACHE")"
 assert_eq "unknown path exits non-zero" "no" "$(fid_cache_get_field "/no/such/path.mp4" imdb_id >/dev/null 2>&1 && echo yes || echo no)"
 
+echo "== identify_film_from_file: the unresolved case's leading empty fields survive intact =="
+# Regression test: a naive `IFS=\$'\t' read -r a b c d e <<< "$result"`
+# collapses leading empty fields when using tab as the delimiter (tab is
+# one of bash's "IFS whitespace" characters, so consecutive/leading
+# occurrences get stripped rather than treated as empty-field markers) -
+# this bug shifted "unresolved" into the imdb_id slot. Parse with `cut`
+# instead (as forced_subs_identify_one does) to confirm the fields land
+# correctly.
+mkdir -p "$WORK/id_lib" "$WORK/id_films"
+cat > "$WORK/id_lib/ost.py" <<'PYEOF'
+import sys
+cmd = sys.argv[1]
+if cmd == "hash":
+    print("0000000000000000")
+PYEOF
+cp "$REPO_ROOT/lib/known_films.py" "$WORK/id_lib/"
+cat > "$WORK/id_films.yaml" <<'EOF'
+films: []
+EOF
+touch "$WORK/id_films/Totally Unresolvable Film.mp4"
+identified=$(identify_film_from_file "$WORK/id_films/Totally Unresolvable Film.mp4" "$WORK/id_lib" "$WORK/id_films.yaml")
+assert_eq "imdb_id field is empty, not 'unresolved'" "" "$(printf '%s' "$identified" | cut -f1)"
+assert_eq "title field is empty" "" "$(printf '%s' "$identified" | cut -f2)"
+assert_eq "year field is empty" "" "$(printf '%s' "$identified" | cut -f3)"
+assert_eq "confidence field is unresolved" "unresolved" "$(printf '%s' "$identified" | cut -f4)"
+assert_eq "reason field is no_match, in the right slot" "no_match" "$(printf '%s' "$identified" | cut -f5)"
+
 test_summary_and_exit
