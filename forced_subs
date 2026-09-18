@@ -156,10 +156,12 @@ pick_edition() {
     if [ -n "$best" ] && [ "$best_diff" -le 3 ]; then echo "$best"; else echo "unmatched_edition"; fi
 }
 
-# scan_cache row: path \t file_stat_signature \t <the 8-field result line>
-# See "Incremental scanning" in the spec: lets scan skip re-probing a file
-# whose last-known bucket was HAS_FORCED and whose size/mtime haven't
-# changed since.
+# scan_cache row: path \t file_stat_signature \t <the 8-field result line> \t
+# checked_date. See "Incremental scanning" in the spec: lets scan skip
+# re-probing a file whose size/mtime haven't changed since it was last
+# checked. A HAS_FORCED result is trusted indefinitely on that basis alone;
+# any other bucket is also trusted, but only for SCAN_FRESHNESS_DAYS - see
+# cmd_scan.
 scan_cache_get() {
     local file="$1"
     [ -f "$SCAN_CACHE" ] || return 1
@@ -167,27 +169,49 @@ scan_cache_get() {
 }
 
 scan_cache_set() {
-    local file="$1" sig="$2" result_line="$3"
+    local file="$1" sig="$2" result_line="$3" checked_date="${4:-$(date -I)}"
     mkdir -p "$(dirname "$SCAN_CACHE")"
     touch "$SCAN_CACHE"
     local tmp
     tmp=$(mktemp)
     awk -F'\t' -v p="$file" '$1 != p' "$SCAN_CACHE" > "$tmp"
-    printf '%s\t%s\t%s\n' "$file" "$sig" "$result_line" >> "$tmp"
+    printf '%s\t%s\t%s\t%s\n' "$file" "$sig" "$result_line" "$checked_date" >> "$tmp"
     mv "$tmp" "$SCAN_CACHE"
 }
 
 cmd_scan() {
+    local rehash=false
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --rehash) rehash=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    # Reuses forced_subs_identify_one's own REHASH switch: a deep `scan
+    # --rehash` should also give previously-unresolved titles another shot
+    # at re-identification, not just re-probe convert_video.
+    [ "$rehash" = "true" ] && REHASH=true
     while IFS= read -r file; do
         local sig cached_row
         sig=$(file_stat_signature "$file")
         if cached_row=$(scan_cache_get "$file"); then
-            local cached_sig cached_bucket
+            local cached_sig cached_bucket cached_checked
             cached_sig=$(printf '%s' "$cached_row" | cut -f2)
             cached_bucket=$(printf '%s' "$cached_row" | cut -f3)
-            if [ "$cached_sig" = "$sig" ] && [ "$cached_bucket" = "HAS_FORCED" ]; then
-                printf '%s\n' "$cached_row" | cut -f3-
-                continue
+            cached_checked=$(printf '%s' "$cached_row" | cut -f11)
+            if [ "$cached_sig" = "$sig" ]; then
+                if [ "$cached_bucket" = "HAS_FORCED" ]; then
+                    printf '%s\n' "$cached_row" | cut -f3-10
+                    continue
+                fi
+                if [ "$rehash" != "true" ] && [ -n "$cached_checked" ]; then
+                    local age_days
+                    age_days=$(( ( $(epoch_of_date "$(date +%Y-%m-%d)") - $(epoch_of_date "$cached_checked") ) / 86400 ))
+                    if [ "$age_days" -lt "$SCAN_FRESHNESS_DAYS" ]; then
+                        printf '%s\n' "$cached_row" | cut -f3-10
+                        continue
+                    fi
+                fi
             fi
         fi
 
