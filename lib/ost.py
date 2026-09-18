@@ -11,13 +11,16 @@ Usage:
   ost.py identify_by_hash <hash>                   (env: OST_API_KEY OST_USER_AGENT)
   ost.py find_forced_by_hash <hash>                (env: OST_API_KEY OST_USER_AGENT)
   ost.py find_forced_by_imdb <imdb_numeric>        (env: OST_API_KEY OST_USER_AGENT)
+  ost.py search_by_title <title> [year]            (env: OST_API_KEY OST_USER_AGENT)
   ost.py download <file_id> <output_path>          (env: OST_API_KEY OST_USER_AGENT OST_TOKEN)
 """
 import json
 import os
+import re
 import struct
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 BASE_URL = "https://api.opensubtitles.com/api/v1"
