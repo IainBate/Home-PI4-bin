@@ -52,6 +52,32 @@ imdb_tt_to_numeric() {
     printf '%s' "${1#tt}" | sed 's/^0*//'
 }
 
+# Compares the file's actual duration (minutes) against an editions string
+# ("name:minutes,name:minutes") and returns the closest name within a
+# 3-minute tolerance, or "unmatched_edition". Shared by forced_subs's
+# cmd_scan and convert_video, so the "which cut is this file really" logic
+# behind find_forced_subtitle's edition-safety check is identical either
+# way it gets triggered.
+pick_edition() {
+    local file="$1" editions="$2"
+    # An empty editions string is routine (any resolved-but-uncurated film
+    # reaches here with no curated edition data at all) - bail before the
+    # array split below, which under `set -u` treats a fully-empty
+    # herestring as leaving "parts" undeclared rather than a one-element
+    # empty array, and "${parts[@]}" on that is an unbound-variable error.
+    [ -z "$editions" ] && { echo "unmatched_edition"; return; }
+    local duration_min
+    duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
+    local best="" best_diff=999999
+    IFS=',' read -ra parts <<< "$editions"
+    for part in "${parts[@]}"; do
+        local name="${part%%:*}" minutes="${part##*:}"
+        local diff=$(( duration_min > minutes ? duration_min - minutes : minutes - duration_min ))
+        if [ "$diff" -lt "$best_diff" ]; then best_diff=$diff; best="$name"; fi
+    done
+    if [ -n "$best" ] && [ "$best_diff" -le 3 ]; then echo "$best"; else echo "unmatched_edition"; fi
+}
+
 # Shared by forced_subs and convert_video - both read the same
 # secrets.yaml/opensubtitles credentials and talk to the same OpenSubtitles
 # account, so neither should have its own copy of this. load_opensubtitles_creds
