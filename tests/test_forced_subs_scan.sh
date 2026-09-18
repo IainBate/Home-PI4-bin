@@ -43,6 +43,7 @@ ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/high.srt" -map 0:v -map 0:a -map 1:s -c:
     -metadata:s:s:0 language=eng -disposition:s:0 forced "$WORK/films/Star Wars/has_forced.mkv" -hide_banner -loglevel error
 ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/films/Star Wars/Phantom Menace.mp4" -hide_banner -loglevel error
 ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/films/Unmatched/Some Random Film (2015).mp4" -hide_banner -loglevel error
+ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$WORK/films/TitleSearch/Uncurated Resolvable Film.mp4" -hide_banner -loglevel error
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
 export FORCED_SUBS_KNOWN_FILMS="$WORK/films.yaml"
