@@ -598,7 +598,7 @@ report_body() {
     unidentified_count=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" && $8=="no_match"' | wc -l | tr -d ' ')
     if [ "$unidentified_count" -gt 0 ]; then
         echo ""
-        echo "$unidentified_count file(s) have no confident film match at all (mostly TV episodes, or films not yet worth curating) - not shown individually."
+        echo "$unidentified_count file(s) have no confident film match at all (mostly TV episodes, or titles the title-search fallback couldn't confidently resolve either) - not shown individually."
     fi
 }
 
