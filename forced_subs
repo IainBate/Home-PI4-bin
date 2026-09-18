@@ -78,7 +78,19 @@ forced_subs_identify_one() {
         elif [ "$count" -gt 1 ]; then
             confidence="unresolved"; reason="ambiguous_title_multiple_years"
         else
-            confidence="unresolved"; reason="no_match"
+            # Neither the hash match nor the curated known_films.yaml
+            # list resolved this file - try OpenSubtitles' own movie
+            # title-search as a last resort before giving up. This is
+            # exact-match only (see ost.py's pick_title_match) and never
+            # guesses, so it's safe to fall back to unconditionally.
+            local search_result
+            search_result=$(python3 "$LIBDIR/ost.py" search_by_title "$norm_title" "$year_guess" 2>/dev/null || true)
+            if [ -n "$search_result" ]; then
+                IFS=$'\t' read -r imdb_id title year <<< "$search_result"
+                confidence="title_search"
+            else
+                confidence="unresolved"; reason="no_match"
+            fi
         fi
     fi
     fid_cache_set "$file" "$imdb_id" "$title" "$year" "$confidence" "$reason" "$(date -I)"
