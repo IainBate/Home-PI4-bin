@@ -47,6 +47,19 @@ TARGET_DIR="."
 ANALYZE_MODE=false
 ANALYZE_FILE=""
 
+# Shared with forced_subs (lib/forced_subs_common.sh): identify a film,
+# search OpenSubtitles, and mux in a forced-English subtitle - see
+# maybe_fetch_forced_subtitle below, called once conversion finishes.
+# Same env var names as forced_subs itself, so tests/deployments override
+# both scripts identically.
+CV_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CV_LIBDIR="${FORCED_SUBS_LIBDIR:-$CV_REPO_ROOT/lib}"
+CV_KNOWN_FILMS_YAML="${FORCED_SUBS_KNOWN_FILMS:-$CV_REPO_ROOT/forced_subs_known_films.yaml}"
+CV_SECRETS_YAML="${FORCED_SUBS_SECRETS_YAML:-$CV_REPO_ROOT/secrets.yaml}"
+FID_CACHE="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
+# shellcheck source=lib/forced_subs_common.sh
+. "$CV_LIBDIR/forced_subs_common.sh"
+
 # --- Subtitle Detection and Processing ---
 # Defined up front (rather than inline further down, where they used to
 # live) so --analyze-subs can call analyze_subtitles before any of the
