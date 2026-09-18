@@ -212,16 +212,22 @@ cmd_scan() {
                 bucket="NEEDS_FORCED_UNKNOWN"
                 reason=$(fid_cache_get_field "$file" reason 2>/dev/null || echo "unresolved")
             else
-                local lookup
+                # Any resolved imdb_id is now eligible for fetching,
+                # whether it came from the hash match, the curated list's
+                # filename fallback, or the title-search fallback (see
+                # forced_subs_identify_one) - known_films.yaml's role has
+                # narrowed to supplying EXTRA edition-safety data for
+                # titles with real multiple cuts (see cmd_apply's
+                # edition_count handling), not gating whether a film gets
+                # attempted at all. A lookup miss just means no such data
+                # exists for this title; edition stays empty and
+                # cmd_apply's multi-edition guard is simply never
+                # triggered for it (edition_count 0 or 1).
+                bucket="NEEDS_FORCED_KNOWN"
+                local lookup editions
                 lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
-                if [ -z "$lookup" ]; then
-                    bucket="NEEDS_FORCED_UNKNOWN"; reason="not_on_known_list"
-                else
-                    bucket="NEEDS_FORCED_KNOWN"
-                    local editions
-                    IFS=$'\t' read -r _ _ editions <<< "$lookup"
-                    edition=$(pick_edition "$file" "$editions")
-                fi
+                IFS=$'\t' read -r _ _ editions <<< "$lookup"
+                edition=$(pick_edition "$file" "$editions")
             fi
         fi
         local result_line
