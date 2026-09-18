@@ -396,7 +396,7 @@ cmd_apply() {
         # sidecar, or a full-length dialogue track sitting next to the
         # film) falls through to the normal search path below, exactly as
         # if $external had been 0 all along.
-        local srt_path=""
+        local srt_path="" edition_count=0
         if [ "$external" = "1" ]; then
             local candidate_srt
             candidate_srt=$(find_sidecar_srt "$file")
