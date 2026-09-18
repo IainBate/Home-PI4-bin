@@ -138,4 +138,29 @@ else
     fail "scan --rehash should bypass the freshness check entirely"
 fi
 
+echo "== scan --rehash also gives a previously-unresolved file another identify attempt =="
+# "Some Random Film" resolved to nothing on the first scan (no hash match,
+# not curated, and the fake ost.py's search_by_title only recognizes
+# "Uncurated Resolvable Film"). Point search_by_title at it now and confirm
+# a plain scan leaves it alone (sticky "unresolved" cache) while
+# scan --rehash gives it a fresh identify attempt that resolves it.
+RANDOM_FILM="$WORK/films/Unmatched/Some Random Film (2015).mp4"
+cat > "$WORK/lib/ost.py" <<'PYEOF'
+import sys
+cmd = sys.argv[1]
+if cmd == "hash":
+    print("0000000000000000")
+elif cmd == "search_by_title":
+    if sys.argv[2] in ("Uncurated Resolvable Film", "Some Random Film"):
+        print("tt5432109\tSome Random Film\t2015")
+PYEOF
+out_plain=$("$FORCED_SUBS" scan)
+line=$(printf '%s\n' "$out_plain" | grep "Some Random Film")
+assert_contains "plain scan leaves it NEEDS_FORCED_UNKNOWN (identify cache is sticky without --rehash)" "$line" "NEEDS_FORCED_UNKNOWN"
+
+out_rehash=$("$FORCED_SUBS" scan --rehash)
+line2=$(printf '%s\n' "$out_rehash" | grep "Some Random Film")
+assert_contains "scan --rehash resolves it via a fresh identify attempt" "$line2" "NEEDS_FORCED_KNOWN"
+assert_contains "carries the newly title-search-resolved imdb_id" "$line2" "tt5432109"
+
 test_summary_and_exit
