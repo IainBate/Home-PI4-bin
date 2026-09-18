@@ -37,12 +37,19 @@ films:
 EOF
 
 # Fake ost.py: `hash` returns a fixed value; every network subcommand
-# returns nothing (empty), forcing identify down the filename-fallback
-# path deterministically for this test.
+# returns nothing (empty) EXCEPT search_by_title, which resolves exactly
+# one title ("Some Unlisted Film" - not in films.yaml at all) to prove
+# the title-search fallback tier runs and is trusted once the hash match
+# and the curated filename fallback have both failed; everything else
+# (including "Totally Unresolvable Film") gets nothing from any tier.
 cat > "$WORK/lib/ost.py" <<'PYEOF'
 import sys
-if sys.argv[1] == "hash":
+cmd = sys.argv[1]
+if cmd == "hash":
     print("0000000000000000")
+elif cmd == "search_by_title":
+    if sys.argv[2] == "Some Unlisted Film":
+        print("tt8888888\tSome Unlisted Film\t2023")
 PYEOF
 
 export FORCED_SUBS_LIBDIR="$WORK/lib"
