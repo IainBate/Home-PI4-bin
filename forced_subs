@@ -439,19 +439,13 @@ cmd_apply() {
                 # release/runtime filtering at all, so for a film with
                 # multiple curated editions (e.g. theatrical vs extended)
                 # it could mux a wrong-runtime subtitle in permanently.
-                # Don't trust the unfiltered fallback for those; the
-                # hash-based path above stays usable since it's already
-                # edition-exact.
-                local lookup editions_str edition_count
+                # Don't skip the fallback outright for those - note the
+                # edition count here and verify the downloaded candidate's
+                # own runtime against this file below, once it's in hand.
+                local lookup editions_str
                 lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
                 IFS=$'\t' read -r _ _ editions_str <<< "$lookup"
                 edition_count=$(printf '%s' "$editions_str" | tr ',' '\n' | grep -c .)
-                if [ "$edition_count" -gt 1 ]; then
-                    consecutive_errors=0
-                    unavailable_cache_set "$file" "ambiguous"
-                    log_apply "$file" "unavailable" "ambiguous"
-                    continue
-                fi
 
                 local imdb_numeric imdb_rc
                 imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
