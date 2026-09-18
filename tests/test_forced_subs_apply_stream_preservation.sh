@@ -42,6 +42,11 @@ ffmpeg -y -i "$WORK/base.mp4" -i "$WORK/existing.srt" -map 0:v -map 0:a -map 1:s
     -c:v copy -c:a copy -c:s srt -metadata:s:s:0 language=eng \
     "$FILE" -hide_banner -loglevel error
 
+# A distinctive, clearly-not-"now" mtime so the post-apply comparison
+# below is unambiguous.
+touch -d "2020-01-01 00:00:00" "$FILE"
+before_mtime=$(source "$WORK/lib/forced_subs_common.sh"; file_stat_signature "$FILE" | cut -d: -f2)
+
 # Confirm the starting fixture really has exactly one, non-forced, subtitle
 # stream before apply runs (so a later count of 2 is meaningful).
 before_forced=$(ffprobe -v error -select_streams s -show_entries stream_disposition=forced -of csv=p=0 "$FILE" | grep -c '^1$' || true)
