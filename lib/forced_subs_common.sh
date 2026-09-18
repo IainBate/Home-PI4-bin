@@ -52,6 +52,55 @@ imdb_tt_to_numeric() {
     printf '%s' "${1#tt}" | sed 's/^0*//'
 }
 
+# The shared three-tier identification chain: hash match, then the curated
+# known_films.yaml filename fallback, then OpenSubtitles' own title-search
+# as a last resort. Pure - no caching, no side effects - so both
+# forced_subs (which wraps this with fid_cache reads/writes) and
+# convert_video (which calls this directly for a single file, no cache)
+# can share exactly the same logic. Prints
+# "imdb_id\ttitle\tyear\tconfidence\treason" (reason only set when
+# confidence is "unresolved"); imdb_id/title/year are empty when
+# unresolved.
+identify_film_from_file() {
+    local file="$1" libdir="$2" known_films_yaml="$3"
+    local imdb_id="" title="" year="" confidence reason=""
+    local hash hash_result
+    hash=$(python3 "$libdir/ost.py" hash "$file")
+    hash_result=$(python3 "$libdir/ost.py" identify_by_hash "$hash" 2>/dev/null || true)
+
+    if [ -n "$hash_result" ]; then
+        IFS=$'\t' read -r imdb_id title year <<< "$hash_result"
+        confidence="hash"
+    else
+        local norm_title year_guess fallback_result count
+        norm_title=$(normalize_title_from_path "$file")
+        year_guess=$(extract_year_from_name "$(basename "$file")")
+        fallback_result=$(python3 "$libdir/known_films.py" find_by_title_year "$known_films_yaml" "$norm_title" "$year_guess")
+        count=$(printf '%s\n' "$fallback_result" | grep -c . || true)
+        if [ "$count" -eq 1 ]; then
+            IFS=$'\t' read -r imdb_id title year <<< "$fallback_result"
+            confidence="filename"
+        elif [ "$count" -gt 1 ]; then
+            confidence="unresolved"; reason="ambiguous_title_multiple_years"
+        else
+            # Neither the hash match nor the curated known_films.yaml
+            # list resolved this file - try OpenSubtitles' own movie
+            # title-search as a last resort before giving up. This is
+            # exact-match only (see ost.py's pick_title_match) and never
+            # guesses, so it's safe to fall back to unconditionally.
+            local search_result
+            search_result=$(python3 "$libdir/ost.py" search_by_title "$norm_title" "$year_guess" 2>/dev/null || true)
+            if [ -n "$search_result" ]; then
+                IFS=$'\t' read -r imdb_id title year <<< "$search_result"
+                confidence="title_search"
+            else
+                confidence="unresolved"; reason="no_match"
+            fi
+        fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s' "$imdb_id" "$title" "$year" "$confidence" "$reason"
+}
+
 # "<size>:<mtime_epoch>" for a file - portable across GNU stat (the Pi) and
 # BSD stat (macOS, where these tests are run from during development).
 file_stat_signature() {
