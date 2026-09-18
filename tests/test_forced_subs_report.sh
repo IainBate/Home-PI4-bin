@@ -58,8 +58,15 @@ assert_contains "Phantom Menace listed as added" "$out" "Phantom Menace.mp4"
 echo "== the unmatched obscure film appears under manual attention =="
 assert_contains "Unmatched Obscure Film listed for manual attention" "$out" "Unmatched Obscure Film"
 
-echo "== the report is also written into the films root itself =="
-assert_file_exists "report file written to the films root" "$WORK/films/_FORCED_SUBTITLES_REPORT.txt"
-assert_eq "file content matches what was printed to stdout" "$out" "$(cat "$WORK/films/_FORCED_SUBTITLES_REPORT.txt")"
+echo "== the report is also written to REPORT_FILE (a log location, not the films root) =="
+assert_file_exists "report file written to REPORT_FILE" "$WORK/logs/forced_subs_report.txt"
+assert_eq "file content matches what was printed to stdout" "$out" "$(cat "$WORK/logs/forced_subs_report.txt")"
+
+echo "== nothing is ever written into the films root itself =="
+# The films library is the user's media, not this tool's bookkeeping
+# space - regression test for an earlier design that wrote the report
+# straight into $FILMS_ROOT.
+leftover=$(find "$WORK/films" -maxdepth 1 -type f)
+assert_eq "no stray files created directly in the films root" "" "$leftover"
 
 test_summary_and_exit
