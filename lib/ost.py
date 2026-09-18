@@ -129,6 +129,52 @@ def cmd_find_forced_by_imdb(imdb_numeric):
         print(f"{file_id}\t{release}\t{language}")
 
 
+def _normalize_for_title_match(s):
+    s = s.lower()
+    s = re.sub(r"[^a-z0-9]+", " ", s)
+    return " ".join(s.split())
+
+
+def cmd_search_by_title(title, year=""):
+    # Stage 1 of identify's title-search fallback (used only once the
+    # hash match and the curated known_films.yaml filename match have
+    # both failed): search OpenSubtitles' movie/feature database - not
+    # subtitle search - directly by title. Deliberately EXACT-match only,
+    # no substring/fuzzy logic, and never guesses: requires feature_type
+    # "Movie" (excludes TV episodes, clip shows, fan videos that the raw
+    # API response otherwise mixes in - confirmed against a real "Moana"
+    # query, which also returned an unrelated song video mislabeled as a
+    # Movie), an exact normalized title match, and - when a year was
+    # extracted from the filename - an exact year match too. With no year
+    # to disambiguate, more than one exact-title Movie match is treated
+    # as ambiguous and nothing is printed, exactly like the existing
+    # curated-list filename fallback's own multi-year collision handling.
+    query = urllib.parse.quote(title)
+    path = f"features?query={query}"
+    if year:
+        path += f"&year={urllib.parse.quote(str(year))}"
+    resp = _request("GET", path, os.environ["OST_API_KEY"], os.environ["OST_USER_AGENT"])
+    target = _normalize_for_title_match(title)
+    candidates = []
+    for item in resp.get("data", []):
+        attrs = item.get("attributes", {}) or {}
+        if attrs.get("feature_type") != "Movie":
+            continue
+        imdb_id = attrs.get("imdb_id")
+        if not imdb_id:
+            continue
+        api_title = attrs.get("title") or ""
+        if _normalize_for_title_match(api_title) != target:
+            continue
+        api_year = str(attrs.get("year") or "")
+        if year and api_year != str(year):
+            continue
+        candidates.append((imdb_id, api_title, api_year))
+    if len(candidates) == 1:
+        imdb_id, api_title, api_year = candidates[0]
+        print(f"tt{int(imdb_id):07d}\t{api_title}\t{api_year}")
+
+
 def cmd_download(file_id, output_path):
     resp = _request(
         "POST", "download", os.environ["OST_API_KEY"], os.environ["OST_USER_AGENT"],
