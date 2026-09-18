@@ -562,36 +562,28 @@ report_body() {
 
     # Split what used to be one flat "sort these out yourself" dump into
     # sections by what action each one actually needs, instead of lumping
-    # curated near-misses in with thousands of TV episodes that were never
-    # identifiable as films at all (see forced_subs_identify_one and
-    # cmd_scan's NEEDS_FORCED_UNKNOWN reasons for where each of these
-    # reason codes comes from).
+    # identified-but-unfetched films in with thousands of TV episodes that
+    # were never identifiable as films at all (see forced_subs_identify_one
+    # and cmd_scan's NEEDS_FORCED_UNKNOWN reasons for where each of these
+    # reason codes comes from). Any resolved film - curated in
+    # forced_subs_known_films.yaml or not - is attempted by apply, so this
+    # no longer distinguishes "curated" from "identified via title-search":
+    # both land here identically if the fetch itself came back empty.
     echo ""
     echo "=== Needs forced subtitles - you decide what to do ==="
 
-    local curated_unfetched
-    curated_unfetched=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_KNOWN"' | while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
+    local unfetched
+    unfetched=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_KNOWN"' | while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
         if unavailable_cache_is_fresh "$file"; then
             local r
             r=$(awk -F'\t' -v p="$file" '$1==p {v=$2} END{print v}' "$UNAVAILABLE_CACHE")
             echo "  $file ($r)"
         fi
     done)
-    if [ -n "$curated_unfetched" ]; then
+    if [ -n "$unfetched" ]; then
         echo ""
-        echo "-- Curated, but no matching subtitle could be fetched automatically --"
-        printf '%s\n' "$curated_unfetched"
-    fi
-
-    local not_curated
-    not_curated=$(printf '%s\n' "$scan_output" | awk -F'\t' '$1=="NEEDS_FORCED_UNKNOWN" && $8=="not_on_known_list" {
-        t = ($4 == "") ? "unidentified title" : $4
-        print "  " $2 " -> " t
-    }')
-    if [ -n "$not_curated" ]; then
-        echo ""
-        echo "-- Identified, but not yet in the curated list (add to forced_subs_known_films.yaml) --"
-        printf '%s\n' "$not_curated"
+        echo "-- Identified, but no matching subtitle could be fetched automatically --"
+        printf '%s\n' "$unfetched"
     fi
 
     local ambiguous_year
