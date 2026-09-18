@@ -91,4 +91,51 @@ echo "== incremental: an unchanged HAS_FORCED file is replayed from cache, not r
 out2=$(FORCED_SUBS_CONVERT_VIDEO="$WORK/no-such-convert_video" "$FORCED_SUBS" scan 2>&1)
 assert_contains "HAS_FORCED file still reported correctly with convert_video unavailable" "$out2" "$(printf 'HAS_FORCED\t%s/films/Star Wars/has_forced.mkv' "$WORK")"
 
+# A stand-in convert_video that records every invocation to a marker log
+# (so the tests below can prove whether a re-probe actually happened)
+# while still returning realistic --analyze-subs output.
+MARKER_LOG="$WORK/convert_video_marker_log"
+FAKE_CONVERT_VIDEO="$WORK/fake_convert_video.sh"
+cat > "$FAKE_CONVERT_VIDEO" <<EOF
+#!/bin/bash
+echo "\$2" >> "$MARKER_LOG"
+echo "COVERAGE=0 FORCED=0 EXTERNAL_SRT=0"
+EOF
+chmod +x "$FAKE_CONVERT_VIDEO"
+PHANTOM_FILE="$WORK/films/Star Wars/Phantom Menace.mp4"
+
+echo "== incremental: a freshly-checked NEEDS_FORCED_KNOWN file is replayed from cache within the freshness window =="
+"$FORCED_SUBS" scan >/dev/null  # populate the cache with today's checked_date
+rm -f "$MARKER_LOG"
+FORCED_SUBS_CONVERT_VIDEO="$FAKE_CONVERT_VIDEO" "$FORCED_SUBS" scan >/dev/null
+if grep -qF "$PHANTOM_FILE" "$MARKER_LOG" 2>/dev/null; then
+    fail "Phantom Menace was re-probed even though its cache entry is fresh"
+else
+    pass "Phantom Menace was NOT re-probed (replayed from cache, still within the freshness window)"
+fi
+
+echo "== incremental: a stale (>=SCAN_FRESHNESS_DAYS) NEEDS_FORCED_KNOWN entry is re-probed =="
+# Back-date just this one cache row's checked_date (last field) well past
+# the default 30-day freshness window, leaving its bucket/other fields
+# untouched.
+awk -F'\t' -v OFS='\t' -v p="$PHANTOM_FILE" '$1==p {$NF="2020-01-01"} {print}' "$SCAN_CACHE" > "$SCAN_CACHE.tmp"
+mv "$SCAN_CACHE.tmp" "$SCAN_CACHE"
+rm -f "$MARKER_LOG"
+FORCED_SUBS_CONVERT_VIDEO="$FAKE_CONVERT_VIDEO" "$FORCED_SUBS" scan >/dev/null
+if grep -qF "$PHANTOM_FILE" "$MARKER_LOG" 2>/dev/null; then
+    pass "Phantom Menace was re-probed once its cache entry went stale"
+else
+    fail "Phantom Menace should have been re-probed - its cache entry is well past the freshness window"
+fi
+
+echo "== scan --rehash forces a re-probe even within the freshness window =="
+"$FORCED_SUBS" scan >/dev/null  # re-populate with today's checked_date again
+rm -f "$MARKER_LOG"
+FORCED_SUBS_CONVERT_VIDEO="$FAKE_CONVERT_VIDEO" "$FORCED_SUBS" scan --rehash >/dev/null
+if grep -qF "$PHANTOM_FILE" "$MARKER_LOG" 2>/dev/null; then
+    pass "scan --rehash re-probed a file despite its fresh cache entry"
+else
+    fail "scan --rehash should bypass the freshness check entirely"
+fi
+
 test_summary_and_exit
