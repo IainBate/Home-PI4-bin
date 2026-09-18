@@ -1,14 +1,19 @@
 #!/bin/bash
-# Regression test for the multi-edition runtime-verification fix in
-# cmd_apply: when a curated title has more than one edition (e.g.
-# theatrical vs extended) and OpenSubtitles' edition-exact hash lookup
-# finds nothing, apply falls back to the runtime-unfiltered IMDb search.
-# That fallback must not be trusted blindly - the downloaded candidate's
-# own last-cue timestamp must line up with this file's actual duration
-# (see srt_last_cue_minutes() and its use in cmd_apply in forced_subs).
-# A close match should still get muxed in; a mismatch (wrong edition's
-# subtitle) must be rejected and logged "ambiguous", same as before this
-# fix existed for the case where the fallback never even ran.
+# Regression test for the multi-edition safety check in cmd_apply: when a
+# curated title has more than one edition (e.g. theatrical vs extended)
+# and OpenSubtitles' edition-exact hash lookup finds nothing, apply falls
+# back to the runtime-unfiltered IMDb search. That fallback's candidate
+# must not be trusted blindly.
+#
+# An earlier version of this check compared the candidate SRT's own last
+# cue timestamp to the video's actual duration - that was WRONG: a forced
+# subtitle track only covers foreign-language dialogue scenes, so even a
+# correctly-matched candidate's last cue can sit long before the credits
+# (proven directly against a real OpenSubtitles response for The
+# Fellowship of the Ring's extended cut, whose last forced cue lands 46
+# minutes before the film's actual end). The fix instead checks the
+# candidate's own release-name string for an explicit conflicting edition
+# label - see edition_label_conflict() in forced_subs.
 set -uo pipefail
 cd "$(dirname "$0")"
 source test_helpers.sh
@@ -18,73 +23,78 @@ FORCED_SUBS="$REPO_ROOT/forced_subs"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-mkdir -p "$WORK/lib" "$WORK/films/Match" "$WORK/films/Mismatch"
+mkdir -p "$WORK/lib" "$WORK/films/Match" "$WORK/films/Conflict" "$WORK/films/Unresolved"
 cp "$REPO_ROOT/lib/forced_subs_common.sh" "$REPO_ROOT/lib/known_films.py" "$WORK/lib/"
 
 cat > "$WORK/films.yaml" <<'EOF'
 films:
-  - title: "Runtime Match Film"
+  - title: "Label Match Film"
     aliases: ""
     year: 2024
-    imdb_id: "tt6000001"
+    imdb_id: "tt7000001"
     editions: "theatrical:5,extended:20"
-  - title: "Runtime Mismatch Film"
+  - title: "Label Conflict Film"
     aliases: ""
     year: 2024
-    imdb_id: "tt6000002"
+    imdb_id: "tt7000002"
+    editions: "theatrical:5,extended:20"
+  - title: "Unresolved Edition Film"
+    aliases: ""
+    year: 2024
+    imdb_id: "tt7000003"
     editions: "theatrical:5,extended:20"
 EOF
 
-# Both fixtures are ~20 minutes (1200s) long - i.e. actually the "extended"
-# cut. rate=1 keeps frame count (and encode time) trivial despite the long
-# duration.
+# Match and Conflict fixtures are ~20 minutes (1200s) long, i.e. actually
+# the "extended" cut per pick_edition. Unresolved is ~50 minutes - not
+# within 3 minutes of either curated edition, so pick_edition can't
+# confidently resolve it at all. rate=1 keeps frame count (and encode
+# time) trivial despite the long durations.
 ffmpeg -y -f lavfi -i testsrc=duration=1200:size=320x180:rate=1 -f lavfi -i sine=duration=1200 \
-    -pix_fmt yuv420p "$WORK/films/Match/Runtime Match Film.mkv" -hide_banner -loglevel error
+    -pix_fmt yuv420p "$WORK/films/Match/Label Match Film.mkv" -hide_banner -loglevel error
 ffmpeg -y -f lavfi -i testsrc=duration=1200:size=320x180:rate=1 -f lavfi -i sine=duration=1200 \
-    -pix_fmt yuv420p "$WORK/films/Mismatch/Runtime Mismatch Film.mkv" -hide_banner -loglevel error
+    -pix_fmt yuv420p "$WORK/films/Conflict/Label Conflict Film.mkv" -hide_banner -loglevel error
+ffmpeg -y -f lavfi -i testsrc=duration=3000:size=320x180:rate=1 -f lavfi -i sine=duration=3000 \
+    -pix_fmt yuv420p "$WORK/films/Unresolved/Unresolved Edition Film.mkv" -hide_banner -loglevel error
 
-MATCH_FILE="$WORK/films/Match/Runtime Match Film.mkv"
-MISMATCH_FILE="$WORK/films/Mismatch/Runtime Mismatch Film.mkv"
+MATCH_FILE="$WORK/films/Match/Label Match Film.mkv"
+CONFLICT_FILE="$WORK/films/Conflict/Label Conflict Film.mkv"
+UNRESOLVED_FILE="$WORK/films/Unresolved/Unresolved Edition Film.mkv"
 
-# Candidate SRT for the "match" fixture: last cue ends at 19:55 (~19 min),
-# within the 5-minute tolerance of the file's actual ~20 min duration.
-cat > "$WORK/match_candidate.srt" <<'EOF'
+cat > "$WORK/dummy.srt" <<'EOF'
 1
-00:19:50,000 --> 00:19:55,000
-Closing line, near the end of the extended cut.
-EOF
-
-# Candidate SRT for the "mismatch" fixture: last cue ends at 05:00 (~5 min)
-# - the OTHER curated edition's runtime, 15 minutes off the file's actual
-# ~20 min duration and well past the 5-minute tolerance.
-cat > "$WORK/mismatch_candidate.srt" <<'EOF'
-1
-00:04:55,000 --> 00:05:00,000
-Closing line, but from the theatrical cut's runtime instead.
+00:00:05,000 --> 00:00:08,000
+A forced line, wherever it happens to fall in the runtime.
 EOF
 
 # Fake ost.py: find_forced_by_hash always comes back empty (forces every
-# fixture through the IMDb fallback), find_forced_by_imdb returns a
-# distinct sub_file_id per imdb_id, and download serves the matching
-# candidate SRT prepared above.
+# fixture through the IMDb fallback, when it's even attempted), and
+# find_forced_by_imdb's release name is exactly what each case is testing
+# - a label matching the resolved edition, a label conflicting with it,
+# or (for the unresolved-edition fixture, which must never even reach
+# this call) an entry that would fail the test outright if it were
+# invoked. Every imdb-fallback call is also recorded to a marker log.
 cat > "$WORK/lib/ost.py" <<PYEOF
 import sys
 cmd = sys.argv[1]
+MARKER = "$WORK/imdb_marker_log"
 if cmd == "hash":
     print("0000000000000000")
 elif cmd == "find_forced_by_hash":
     pass
 elif cmd == "find_forced_by_imdb":
     imdb = sys.argv[2]
-    if imdb == "6000001":
-        print("101\tRuntime.Match.Forced\ten")
-    elif imdb == "6000002":
-        print("102\tRuntime.Mismatch.Forced\ten")
+    with open(MARKER, "a") as m:
+        m.write(imdb + "\n")
+    if imdb == "7000001":
+        print("101\tSome.Release.Extended.Edition.1080p\ten")
+    elif imdb == "7000002":
+        print("102\tSome.Release.Theatrical.Cut.1080p\ten")
+    elif imdb == "7000003":
+        print("103\tShould.Never.Be.Requested\ten")
 elif cmd == "download":
-    sub_id = sys.argv[2]
-    src = "$WORK/match_candidate.srt" if sub_id == "101" else "$WORK/mismatch_candidate.srt"
     with open(sys.argv[3], "wb") as f:
-        f.write(open(src, "rb").read())
+        f.write(open("$WORK/dummy.srt", "rb").read())
     print("19\tok")
 elif cmd == "login":
     print("test-token")
@@ -111,14 +121,26 @@ export OST_API_KEY=test OST_USER_AGENT=test OST_USERNAME=test OST_PASSWORD=test
 
 "$FORCED_SUBS" apply --max-downloads 5 >/dev/null
 
-echo "== a runtime-matched fallback candidate gets muxed in =="
+marker_log() { cat "$WORK/imdb_marker_log" 2>/dev/null || true; }
+
+echo "== a candidate labelled with the resolved edition is trusted and muxed in =="
 analyze_match=$("$REPO_ROOT/convert_video" --analyze-subs "$MATCH_FILE")
-assert_contains "FORCED=1 after apply (runtime matched within tolerance)" "$analyze_match" "FORCED=1"
+assert_contains "FORCED=1 after apply (release name matches resolved edition)" "$analyze_match" "FORCED=1"
 assert_contains "logged success for the matched fixture" "$(cat "$APPLY_LOG")" "$(printf '%s\tsuccess' "$MATCH_FILE")"
 
-echo "== a runtime-mismatched fallback candidate is rejected, not muxed in =="
-analyze_mismatch=$("$REPO_ROOT/convert_video" --analyze-subs "$MISMATCH_FILE")
-assert_contains "still FORCED=0 (wrong-edition candidate was not trusted)" "$analyze_mismatch" "FORCED=0"
-assert_contains "logged unavailable/ambiguous for the mismatched fixture" "$(cat "$APPLY_LOG")" "$(printf '%s\tunavailable\tambiguous' "$MISMATCH_FILE")"
+echo "== a candidate explicitly labelled as a different edition is rejected =="
+analyze_conflict=$("$REPO_ROOT/convert_video" --analyze-subs "$CONFLICT_FILE")
+assert_contains "still FORCED=0 (conflicting-edition candidate was not trusted)" "$analyze_conflict" "FORCED=0"
+assert_contains "logged unavailable/ambiguous for the conflicting fixture" "$(cat "$APPLY_LOG")" "$(printf '%s\tunavailable\tambiguous' "$CONFLICT_FILE")"
+
+echo "== a file whose own edition can't be resolved never even attempts the fallback =="
+analyze_unresolved=$("$REPO_ROOT/convert_video" --analyze-subs "$UNRESOLVED_FILE")
+assert_contains "still FORCED=0 (bailed before searching)" "$analyze_unresolved" "FORCED=0"
+assert_contains "logged unavailable/ambiguous for the unresolved fixture" "$(cat "$APPLY_LOG")" "$(printf '%s\tunavailable\tambiguous' "$UNRESOLVED_FILE")"
+if [[ "$(marker_log)" == *"7000003"* ]]; then
+    fail "find_forced_by_imdb was called for the unresolved-edition fixture (should have bailed first)"
+else
+    pass "find_forced_by_imdb was never called for the unresolved-edition fixture"
+fi
 
 test_summary_and_exit
