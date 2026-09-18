@@ -375,6 +375,13 @@ remux_forced_subtitle() {
         return 1
     fi
 
+    # Preserve the original file's mtime across the swap - adding a
+    # subtitle track isn't a meaningful content change from the user's
+    # point of view (media-server "recently added" sorting, their own
+    # backup tooling, etc. shouldn't treat it as one). `touch -r` before
+    # the same-directory `mv` below transfers $file's current mtime onto
+    # the replacement; the rename itself never touches mtime.
+    touch -r "$file" "$tmp_out" 2>/dev/null || true
     mv "$tmp_out" "$file"
     trap - RETURN
 }
