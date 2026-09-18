@@ -443,14 +443,23 @@ cmd_apply() {
                 # ambiguous, log as ambiguous") - the IMDb fallback has no
                 # release/runtime filtering at all, so for a film with
                 # multiple curated editions (e.g. theatrical vs extended)
-                # it could mux a wrong-runtime subtitle in permanently.
-                # Don't skip the fallback outright for those - note the
-                # edition count here and verify the downloaded candidate's
-                # own runtime against this file below, once it's in hand.
+                # it could mux a wrong-cut subtitle in permanently. Note
+                # the edition count here; if scan couldn't confidently
+                # resolve which cut THIS file actually is either
+                # (edition="unmatched_edition"), there's no basis to
+                # verify anything - bail now rather than spend an API
+                # call. Otherwise, verify the candidate's own release
+                # name below once it's in hand (see edition_label_conflict).
                 local lookup editions_str
                 lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
                 IFS=$'\t' read -r _ _ editions_str <<< "$lookup"
                 edition_count=$(printf '%s' "$editions_str" | tr ',' '\n' | grep -c .)
+                if [ "$edition_count" -gt 1 ] && { [ -z "$edition" ] || [ "$edition" = "unmatched_edition" ]; }; then
+                    consecutive_errors=0
+                    unavailable_cache_set "$file" "ambiguous"
+                    log_apply "$file" "unavailable" "ambiguous"
+                    continue
+                fi
 
                 local imdb_numeric imdb_rc
                 imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
