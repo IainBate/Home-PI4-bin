@@ -430,99 +430,43 @@ cmd_apply() {
         fi
 
         if [ -z "$srt_path" ]; then
-            # ost.py's _request calls sys.exit(1) on any HTTP/network error
-            # and prints nothing on stdout in that case - a non-zero exit
-            # code reliably means "the call errored" (credentials/outage;
-            # NOT safe to cache as unavailable, it may well have a match),
-            # while exit 0 with empty stdout reliably means "no match
-            # found" (safe to cache). A run of 3 consecutive errors aborts
-            # early rather than burning through every remaining candidate.
-            local hash result hash_rc
-            hash=$(python3 "$LIBDIR/ost.py" hash "$file")
-            result=$(python3 "$LIBDIR/ost.py" find_forced_by_hash "$hash" 2>>"$APPLY_LOG")
-            hash_rc=$?
-            if [ "$hash_rc" -ne 0 ]; then
-                consecutive_errors=$((consecutive_errors + 1))
-                log_apply "$file" "error" "hash_search_failed"
-                if [ "$consecutive_errors" -ge 3 ]; then
-                    echo "ERROR: 3 consecutive OpenSubtitles API failures - aborting apply run early." >&2
-                    return 1
-                fi
-                continue
-            fi
+            # find_forced_subtitle (lib/forced_subs_common.sh) does the
+            # edition-exact hash search, then - if that's empty - the
+            # runtime-unfiltered IMDb fallback with the edition-safety
+            # check, shared with convert_video's own single-file fetch.
+            # ost.py's _request calls sys.exit(1) on any HTTP/network
+            # error and prints nothing on stdout in that case - a
+            # *_search_failed status reliably means "the call errored"
+            # (credentials/outage; NOT safe to cache as unavailable, it
+            # may well have a match), while every other non-success
+            # status means "genuinely no match/ambiguous/download issue"
+            # (safe to cache). A run of 3 consecutive errors aborts early
+            # rather than burning through every remaining candidate.
+            local find_result status
+            find_result=$(find_forced_subtitle "$file" "$imdb_id" "$edition" "$KNOWN_FILMS_YAML" "$LIBDIR" "$APPLY_LOG")
+            status=$(printf '%s' "$find_result" | cut -f1)
+            srt_path=$(printf '%s' "$find_result" | cut -f2)
 
-            if [ -z "$result" ]; then
-                # Bounded sanity check (spec: "sanity-checked against the
-                # matched edition's expected runtime... if still
-                # ambiguous, log as ambiguous") - the IMDb fallback has no
-                # release/runtime filtering at all, so for a film with
-                # multiple curated editions (e.g. theatrical vs extended)
-                # it could mux a wrong-cut subtitle in permanently. Note
-                # the edition count here; if scan couldn't confidently
-                # resolve which cut THIS file actually is either
-                # (edition="unmatched_edition"), there's no basis to
-                # verify anything - bail now rather than spend an API
-                # call. Otherwise, verify the candidate's own release
-                # name below once it's in hand (see edition_label_conflict).
-                local lookup editions_str
-                lookup=$(python3 "$LIBDIR/known_films.py" lookup "$KNOWN_FILMS_YAML" "$imdb_id" 2>/dev/null || true)
-                IFS=$'\t' read -r _ _ editions_str <<< "$lookup"
-                edition_count=$(printf '%s' "$editions_str" | tr ',' '\n' | grep -c .)
-                if [ "$edition_count" -gt 1 ] && { [ -z "$edition" ] || [ "$edition" = "unmatched_edition" ]; }; then
+            case "$status" in
+                success)
                     consecutive_errors=0
-                    unavailable_cache_set "$file" "ambiguous"
-                    log_apply "$file" "unavailable" "ambiguous"
-                    continue
-                fi
-
-                local imdb_numeric imdb_rc
-                imdb_numeric=$(imdb_tt_to_numeric "$imdb_id")
-                result=$(python3 "$LIBDIR/ost.py" find_forced_by_imdb "$imdb_numeric" 2>>"$APPLY_LOG")
-                imdb_rc=$?
-                if [ "$imdb_rc" -ne 0 ]; then
+                    ;;
+                hash_search_failed|imdb_search_failed)
                     consecutive_errors=$((consecutive_errors + 1))
-                    log_apply "$file" "error" "imdb_search_failed"
+                    log_apply "$file" "error" "$status"
                     if [ "$consecutive_errors" -ge 3 ]; then
                         echo "ERROR: 3 consecutive OpenSubtitles API failures - aborting apply run early." >&2
                         return 1
                     fi
                     continue
-                fi
-            fi
-            consecutive_errors=0
-
-            if [ -z "$result" ]; then
-                unavailable_cache_set "$file" "no_match_found"
-                log_apply "$file" "unavailable" "no_match_found"
-                continue
-            fi
-
-            # This candidate came from the runtime-unfiltered IMDb fallback
-            # (never the hash path, which is already edition-exact) - for a
-            # multi-edition title, confirm its release name doesn't
-            # explicitly claim to be a different cut than the one scan
-            # already determined this file to be, before spending a
-            # download on it.
-            if [ "$edition_count" -gt 1 ]; then
-                local release_name
-                release_name=$(printf '%s' "$result" | cut -f2)
-                if [ "$(edition_label_conflict "$edition" "$release_name")" = "1" ]; then
+                    ;;
+                *)
                     consecutive_errors=0
-                    unavailable_cache_set "$file" "ambiguous"
-                    log_apply "$file" "unavailable" "ambiguous"
+                    unavailable_cache_set "$file" "$status"
+                    log_apply "$file" "unavailable" "$status"
                     continue
-                fi
-            fi
-
-            local sub_file_id
-            sub_file_id=$(printf '%s' "$result" | cut -f1)
-            srt_path="$(mktemp -u "${TMPDIR:-/tmp}/forced_subs_sub.XXXXXX").srt"
-            if ! python3 "$LIBDIR/ost.py" download "$sub_file_id" "$srt_path" >>"$APPLY_LOG" 2>&1 || [ ! -s "$srt_path" ]; then
-                unavailable_cache_set "$file" "download_failed"
-                log_apply "$file" "unavailable" "download_failed"
-                rm -f "$srt_path"
-                continue
-            fi
+                    ;;
+            esac
         fi
 
         if [ -n "$srt_path" ] && remux_forced_subtitle "$file" "$srt_path"; then
