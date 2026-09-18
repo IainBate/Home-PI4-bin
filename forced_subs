@@ -547,11 +547,11 @@ main() {
     fi
     case "$cmd" in
         identify)
-            load_opensubtitles_creds
+            load_opensubtitles_creds "$SECRETS_YAML"
             cmd_identify "$@"
             ;;
         scan)
-            load_opensubtitles_creds
+            load_opensubtitles_creds "$SECRETS_YAML"
             mkdir -p "$(dirname "$SCAN_LOG")" 2>/dev/null || true
             cmd_scan "$@" | tee -a "$SCAN_LOG"
             ;;
@@ -564,7 +564,7 @@ main() {
                     *) shift ;;
                 esac
             done
-            opensubtitles_login
+            opensubtitles_login "$SECRETS_YAML" "$LIBDIR" || exit 1
             if [ "$quiet" = "true" ]; then
                 cmd_apply "$max" >>"$APPLY_LOG" 2>&1
             else
@@ -572,7 +572,7 @@ main() {
             fi
             ;;
         report)
-            load_opensubtitles_creds
+            load_opensubtitles_creds "$SECRETS_YAML"
             local verbose=false
             [ "${1:-}" = "--verbose" ] && verbose=true
             cmd_report "$verbose"
