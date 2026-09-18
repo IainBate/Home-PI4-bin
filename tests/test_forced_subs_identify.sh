@@ -73,6 +73,14 @@ echo "== the Moana case: no year in the filename is left unresolved, not guessed
 assert_eq "ambiguous file has no imdb_id" "" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" imdb_id)"
 assert_eq "reason recorded as ambiguous" "ambiguous_title_multiple_years" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" reason)"
 
+echo "== a title with no curated entry at all resolves via the title-search fallback =="
+assert_eq "resolved via title-search" "tt8888888" "$(fid_cache_get_field "$WORK/films/Other/Some Unlisted Film.mp4" imdb_id)"
+assert_eq "confidence is title_search, distinct from hash/filename" "title_search" "$(fid_cache_get_field "$WORK/films/Other/Some Unlisted Film.mp4" confidence)"
+
+echo "== a title resolved by none of the three tiers stays genuinely unresolved =="
+assert_eq "no imdb_id" "" "$(fid_cache_get_field "$WORK/films/Other/Totally Unresolvable Film.mp4" imdb_id)"
+assert_eq "reason recorded as no_match" "no_match" "$(fid_cache_get_field "$WORK/films/Other/Totally Unresolvable Film.mp4" reason)"
+
 echo "== --set manually resolves an ambiguous file and is sticky =="
 "$FORCED_SUBS" identify --set "$WORK/films/Moana Films/Moana.mp4" tt9999999 >/dev/null
 assert_eq "manually set imdb_id" "tt9999999" "$(fid_cache_get_field "$WORK/films/Moana Films/Moana.mp4" imdb_id)"
