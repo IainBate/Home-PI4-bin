@@ -679,7 +679,7 @@ main() {
         scan)
             load_opensubtitles_creds
             mkdir -p "$(dirname "$SCAN_LOG")" 2>/dev/null || true
-            cmd_scan | tee -a "$SCAN_LOG"
+            cmd_scan "$@" | tee -a "$SCAN_LOG"
             ;;
         apply)
             local max=5 quiet=false
