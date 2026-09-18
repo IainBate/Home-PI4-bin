@@ -482,6 +482,24 @@ cmd_apply() {
                 log_apply "$file" "unavailable" "no_match_found"
                 continue
             fi
+
+            # This candidate came from the runtime-unfiltered IMDb fallback
+            # (never the hash path, which is already edition-exact) - for a
+            # multi-edition title, confirm its release name doesn't
+            # explicitly claim to be a different cut than the one scan
+            # already determined this file to be, before spending a
+            # download on it.
+            if [ "$edition_count" -gt 1 ]; then
+                local release_name
+                release_name=$(printf '%s' "$result" | cut -f2)
+                if [ "$(edition_label_conflict "$edition" "$release_name")" = "1" ]; then
+                    consecutive_errors=0
+                    unavailable_cache_set "$file" "ambiguous"
+                    log_apply "$file" "unavailable" "ambiguous"
+                    continue
+                fi
+            fi
+
             local sub_file_id
             sub_file_id=$(printf '%s' "$result" | cut -f1)
             srt_path="$(mktemp -u "${TMPDIR:-/tmp}/forced_subs_sub.XXXXXX").srt"
@@ -490,30 +508,6 @@ cmd_apply() {
                 log_apply "$file" "unavailable" "download_failed"
                 rm -f "$srt_path"
                 continue
-            fi
-
-            # This candidate came from the runtime-unfiltered IMDb fallback
-            # (never the hash path, which is already edition-exact) - for a
-            # multi-edition title, confirm its own last-cue timestamp lines
-            # up with this file's actual duration before trusting it. Real
-            # curated edition gaps run 13+ minutes apart, so a 5-minute
-            # tolerance can't confuse them while still tolerating minor
-            # authoring slack (e.g. missing trailing-credits cues).
-            if [ "$edition_count" -gt 1 ]; then
-                local video_duration_min srt_duration_min duration_diff
-                video_duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
-                srt_duration_min=$(srt_last_cue_minutes "$srt_path")
-                if [ "$srt_duration_min" -lt 0 ]; then
-                    duration_diff=999
-                else
-                    duration_diff=$(( video_duration_min > srt_duration_min ? video_duration_min - srt_duration_min : srt_duration_min - video_duration_min ))
-                fi
-                if [ "$duration_diff" -gt 5 ]; then
-                    unavailable_cache_set "$file" "ambiguous"
-                    log_apply "$file" "unavailable" "ambiguous"
-                    rm -f "$srt_path"
-                    continue
-                fi
             fi
         fi
 
