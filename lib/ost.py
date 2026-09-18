@@ -135,28 +135,28 @@ def _normalize_for_title_match(s):
     return " ".join(s.split())
 
 
-def cmd_search_by_title(title, year=""):
-    # Stage 1 of identify's title-search fallback (used only once the
-    # hash match and the curated known_films.yaml filename match have
-    # both failed): search OpenSubtitles' movie/feature database - not
-    # subtitle search - directly by title. Deliberately EXACT-match only,
-    # no substring/fuzzy logic, and never guesses: requires feature_type
-    # "Movie" (excludes TV episodes, clip shows, fan videos that the raw
-    # API response otherwise mixes in - confirmed against a real "Moana"
-    # query, which also returned an unrelated song video mislabeled as a
-    # Movie), an exact normalized title match, and - when a year was
-    # extracted from the filename - an exact year match too. With no year
-    # to disambiguate, more than one exact-title Movie match is treated
-    # as ambiguous and nothing is printed, exactly like the existing
-    # curated-list filename fallback's own multi-year collision handling.
-    query = urllib.parse.quote(title)
-    path = f"features?query={query}"
-    if year:
-        path += f"&year={urllib.parse.quote(str(year))}"
-    resp = _request("GET", path, os.environ["OST_API_KEY"], os.environ["OST_USER_AGENT"])
+# Stage 1 of identify's title-search fallback (used only once the hash
+# match and the curated known_films.yaml filename match have both
+# failed): pure filtering logic over an already-parsed /features response,
+# separated from the HTTP call below so it's unit-testable without a live
+# API. Deliberately EXACT-match only, no substring/fuzzy logic, and never
+# guesses: requires feature_type "Movie" (excludes TV episodes, clip
+# shows, fan videos that the raw API response otherwise mixes in -
+# confirmed against a real "Moana" query, which also returned an
+# unrelated song video mislabeled as a Movie), an exact normalized title
+# match, and - when a year was extracted from the filename - an exact
+# year match too. With no year to disambiguate, more than one exact-title
+# Movie match is treated as ambiguous and nothing is returned, exactly
+# like the existing curated-list filename fallback's own multi-year
+# collision handling (confirmed against the real API too: a bare "Moana"
+# query returns three distinct exact "moana"-titled Movie entries - the
+# real 2016 film, an apparent duplicate catalogue entry, and an unrelated
+# 1926 documentary of the same name - correctly refused rather than
+# guessed).
+def pick_title_match(data, title, year=""):
     target = _normalize_for_title_match(title)
     candidates = []
-    for item in resp.get("data", []):
+    for item in data:
         attrs = item.get("attributes", {}) or {}
         if attrs.get("feature_type") != "Movie":
             continue
@@ -171,7 +171,19 @@ def cmd_search_by_title(title, year=""):
             continue
         candidates.append((imdb_id, api_title, api_year))
     if len(candidates) == 1:
-        imdb_id, api_title, api_year = candidates[0]
+        return candidates[0]
+    return None
+
+
+def cmd_search_by_title(title, year=""):
+    query = urllib.parse.quote(title)
+    path = f"features?query={query}"
+    if year:
+        path += f"&year={urllib.parse.quote(str(year))}"
+    resp = _request("GET", path, os.environ["OST_API_KEY"], os.environ["OST_USER_AGENT"])
+    match = pick_title_match(resp.get("data", []), title, year)
+    if match:
+        imdb_id, api_title, api_year = match
         print(f"tt{int(imdb_id):07d}\t{api_title}\t{api_year}")
 
 
