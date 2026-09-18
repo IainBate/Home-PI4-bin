@@ -507,6 +507,10 @@ report_body() {
 
 cmd_report() {
     local verbose="$1"
+    # Deliberately not under $FILMS_ROOT: the media library is not the
+    # right place for this tool's own bookkeeping output, matching every
+    # other forced_subs log/cache file's location under /home/pi/logs.
+    mkdir -p "$(dirname "$REPORT_FILE")" 2>/dev/null || true
     report_body "$verbose" | tee "$REPORT_FILE"
 }
 
