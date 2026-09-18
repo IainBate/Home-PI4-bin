@@ -433,3 +433,106 @@ fid_cache_set() {
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$file" "$imdb_id" "$title" "$year" "$confidence" "$reason" "$checked" >> "$tmp"
     mv "$tmp" "$cache"
 }
+
+# Called by convert_video once conversion finishes, only when nothing else
+# already provided a subtitle for that file. Identifies the film via the
+# same three-tier chain forced_subs uses (hash match, curated filename
+# fallback, OpenSubtitles title-search) and, on a confident match, fetches
+# and muxes in a forced-English subtitle. When identification is ambiguous
+# or fails outright, prompts interactively - unlike forced_subs's own
+# unattended batch runs, a person is right here to resolve it. Purely a
+# bonus step: never fails the caller's conversion, and any outcome (or
+# skip) is just reported to the user via stdout.
+maybe_fetch_forced_subtitle() {
+    local file="$1" libdir="$2" known_films_yaml="$3" secrets_yaml="$4"
+
+    load_opensubtitles_creds "$secrets_yaml"
+    if [ -z "$OST_API_KEY" ] || [ -z "$OST_USERNAME" ] || [ -z "$OST_PASSWORD" ]; then
+        echo "(Skipping forced-subtitle fetch: OpenSubtitles credentials not configured in $secrets_yaml.)"
+        return 0
+    fi
+
+    echo ""
+    echo "Checking OpenSubtitles for a forced-English subtitle..."
+    local identified imdb_id title year confidence reason
+    identified=$(identify_film_from_file "$file" "$libdir" "$known_films_yaml")
+    imdb_id=$(printf '%s' "$identified" | cut -f1)
+    title=$(printf '%s' "$identified" | cut -f2)
+    year=$(printf '%s' "$identified" | cut -f3)
+    confidence=$(printf '%s' "$identified" | cut -f4)
+    reason=$(printf '%s' "$identified" | cut -f5)
+
+    if [ -n "$imdb_id" ]; then
+        echo "Identified as: ${title:-$imdb_id} ${year:+($year)} [$confidence]"
+    else
+        local norm_title year_guess
+        norm_title=$(normalize_title_from_path "$file")
+        year_guess=$(extract_year_from_name "$(basename "$file")")
+        if [ "$reason" = "ambiguous_title_multiple_years" ]; then
+            echo "Multiple curated titles match \"$norm_title\" and no year in the filename disambiguates:"
+            local candidates candidate_ids=() i=0
+            candidates=$(python3 "$libdir/known_films.py" find_by_title_year "$known_films_yaml" "$norm_title" "$year_guess")
+            while IFS=$'\t' read -r cand_id cand_title cand_year; do
+                [ -n "$cand_id" ] || continue
+                i=$((i + 1))
+                candidate_ids+=("$cand_id")
+                echo "  $i) $cand_title ($cand_year) - $cand_id"
+            done <<< "$candidates"
+            read -p "Pick a number, type an IMDb ID directly (e.g. tt1234567), or press enter to skip: " pick
+            if [[ "$pick" =~ ^[0-9]+$ ]] && [ "$pick" -ge 1 ] && [ "$pick" -le "${#candidate_ids[@]}" ]; then
+                imdb_id="${candidate_ids[$((pick - 1))]}"
+            elif [[ "$pick" =~ ^tt[0-9]+$ ]]; then
+                imdb_id="$pick"
+            fi
+        else
+            read -p "Couldn't identify this film automatically. Type an IMDb ID (e.g. tt1234567) to fetch a forced subtitle, or press enter to skip: " pick
+            [[ "$pick" =~ ^tt[0-9]+$ ]] && imdb_id="$pick"
+        fi
+        if [ -z "$imdb_id" ]; then
+            echo "Skipping forced-subtitle fetch."
+            return 0
+        fi
+        # A manual resolution is sticky and shared with forced_subs's own
+        # fid_cache, exactly like `forced_subs identify --set` - a later
+        # `forced_subs identify` won't redundantly re-attempt this file.
+        fid_cache_set "$file" "$imdb_id" "" "" "manual" "" "$(date +%Y-%m-%d)"
+    fi
+
+    local lookup editions_str edition
+    lookup=$(python3 "$libdir/known_films.py" lookup "$known_films_yaml" "$imdb_id" 2>/dev/null || true)
+    IFS=$'\t' read -r _ _ editions_str <<< "$lookup"
+    edition=$(pick_edition "$file" "$editions_str")
+
+    if ! opensubtitles_login "$secrets_yaml" "$libdir"; then
+        echo "(Could not log in to OpenSubtitles - skipping forced-subtitle fetch.)"
+        return 0
+    fi
+
+    local find_result status srt_path
+    find_result=$(find_forced_subtitle "$file" "$imdb_id" "$edition" "$known_films_yaml" "$libdir" /dev/null)
+    status=$(printf '%s' "$find_result" | cut -f1)
+    srt_path=$(printf '%s' "$find_result" | cut -f2)
+
+    case "$status" in
+        success)
+            if remux_forced_subtitle "$file" "$srt_path"; then
+                echo "Forced-English subtitle added."
+            else
+                echo "(Found a forced subtitle but muxing it in failed - left as-is.)"
+            fi
+            rm -f "$srt_path"
+            ;;
+        no_match_found)
+            echo "(No forced-English subtitle available on OpenSubtitles for this film.)"
+            ;;
+        ambiguous)
+            echo "(Found a subtitle candidate but couldn't safely confirm it matches this file's edition - skipped.)"
+            ;;
+        download_failed)
+            echo "(Found a forced subtitle but downloading it failed - skipped.)"
+            ;;
+        hash_search_failed|imdb_search_failed)
+            echo "(OpenSubtitles search failed - network or API issue. Skipped.)"
+            ;;
+    esac
+}
