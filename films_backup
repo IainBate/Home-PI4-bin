@@ -8,6 +8,7 @@ BACKUP_PATH="/media/pi/Caravan"
 CHOWN_USER="minidlna"
 LOGFILE="/home/pi/logs/films_backup_logfile"
 SUCCESS_MARKER="/home/pi/logs/films_backup_success"
+EXTRA_EXCLUDES=()
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -15,6 +16,9 @@ while [[ "$#" -gt 0 ]]; do
             LUCY_MODE=true
             BACKUP_PATH="/media/pi/Lucy"
             CHOWN_USER="pi"
+            # Keep Our Family off Lucy's drive (with --delete-excluded this
+            # also removes it from there if it is ever copied across).
+            EXTRA_EXCLUDES=(--exclude "/Our Family")
             LOGFILE="/home/pi/logs/lucys_backup_logfile"
             SUCCESS_MARKER="/home/pi/logs/lucys_backup_success"
             shift
