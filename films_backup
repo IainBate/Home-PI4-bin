@@ -41,7 +41,7 @@ exec > >(tee "$LOGFILE") 2>&1
 
 echo "=== films_backup run started: $(date '+%Y-%m-%d %H:%M:%S') (lucy_mode=$LUCY_MODE) ==="
 echo "Backup destination: $BACKUP_PATH/films/"
-sudo rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" /mnt/HDD/films/ "$BACKUP_PATH/films/"
+sudo rsync --archive --delete --progress --delete-excluded --exclude "._*" --exclude "*DS_Store*" "${EXTRA_EXCLUDES[@]}" /mnt/HDD/films/ "$BACKUP_PATH/films/"
 RC=$?
 sudo chown -R $CHOWN_USER "$BACKUP_PATH"
 sudo chgrp -R $CHOWN_USER "$BACKUP_PATH"
