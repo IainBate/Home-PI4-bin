@@ -109,14 +109,19 @@ MAILTO="iain.bate@gmail.com"
 # subtitle-scanner-design.md). identify is weekly - new films arrive rarely,
 # and already-cached files are skipped, so this only has to pick up what's
 # new since last time. apply is daily and rate-limited internally
-# (--max-downloads) to stay within the OpenSubtitles free-tier quota; it's
-# cheap day-to-day because it calls scan internally, which now only
-# re-probes a file that's genuinely new/changed OR whose last check is
-# older than SCAN_FRESHNESS_DAYS (default 30) - see cmd_scan's freshness
-# check in forced_subs. A film stuck ambiguous/unfetched/unmatched isn't
-# going to resolve differently by re-checking it daily.
+# (--max-downloads) to stay within the OpenSubtitles account's real daily
+# quota (confirmed via /api/v1/infos/user on 2026-09-19: 20 downloads/day
+# on this "Sub leecher" free-tier account). --max-downloads 15 here, not
+# 20, deliberately leaves headroom on the same shared account for
+# convert_video's own interactive per-file fetch (maybe_fetch_forced_
+# subtitle) run later the same day. It's cheap day-to-day regardless of
+# the count because it calls scan internally, which now only re-probes a
+# file that's genuinely new/changed OR whose last check is older than
+# SCAN_FRESHNESS_DAYS (default 30) - see cmd_scan's freshness check in
+# forced_subs. A film stuck ambiguous/unfetched/unmatched isn't going to
+# resolve differently by re-checking it daily.
 0 4 * * Sun cd /home/pi/bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
-0 5 * * * cd /home/pi/bin && ./forced_subs apply --quiet
+0 5 * * * cd /home/pi/bin && ./forced_subs apply --max-downloads 15 --quiet
 
 # Monthly deep re-probe: `scan --rehash` bypasses the freshness check above
 # entirely (re-probing every non-HAS_FORCED file via convert_video) AND
