@@ -116,6 +116,12 @@ MAILTO="iain.bate@gmail.com"
 # to avoid commit spam.
 */30 * * * * cd /home/pi/home_automation && bash scripts/sync_maintenance_log.sh --quiet
 
+# Solcast rooftop forecast (see home_automation/config.yaml's solcast
+# comments) - shown alongside the locally-trained solar forecast above, not
+# replacing it. Every 3 hours, not hourly: the free/hobbyist Solcast tier
+# caps accounts at 10 API calls/day, account-wide.
+0 */3 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/solcast_forecast_poller.py --quiet
+
 # Forced-subtitle scanner (see docs/superpowers/specs/2026-09-14-forced-
 # subtitle-scanner-design.md). identify is weekly - new films arrive rarely,
 # and already-cached files are skipped, so this only has to pick up what's
