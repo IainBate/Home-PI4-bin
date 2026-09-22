@@ -90,12 +90,9 @@ cmd_identify() {
 
 # --- scan -----------------------------------------------------------------
 
-# scan_cache row: path \t file_stat_signature \t <the 8-field result line> \t
-# checked_date. See "Incremental scanning" in the spec: lets scan skip
-# re-probing a file whose size/mtime haven't changed since it was last
-# checked. A HAS_FORCED result is trusted indefinitely on that basis alone;
-# any other bucket is also trusted, but only for SCAN_FRESHNESS_DAYS - see
-# cmd_scan.
+# scan_cache_get/set live in lib/forced_subs_common.sh (see the row-format
+# comment there) - shared with fid_cache_set's invalidation on an identify
+# result change.
 cmd_scan() {
     local rehash=false
     while [ $# -gt 0 ]; do
