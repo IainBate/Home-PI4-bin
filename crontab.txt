@@ -76,13 +76,16 @@ MAILTO="iain.bate@gmail.com"
 # when something recurred, at most once a day.
 0 7 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/daily_digest_check.py --quiet
 
-# Weekly health check (see home_automation/config.yaml's weekly_health_check
-# comments) - the priority path: scans battery_mode_daemon.py/
-# hotwater_mode_daemon.py's logs for ERROR/CRITICAL and checks the
-# home_automation*.service units are active. Only emails when something is
-# actually wrong. This was documented in the README as already running but
-# had never actually been added here (2026-09-02) - added now.
-0 8 * * Mon cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
+# Automation health check (see home_automation/config.yaml's
+# weekly_health_check comments) - the priority path: scans
+# battery_mode_daemon.py/hotwater_mode_daemon.py's logs for ERROR/CRITICAL
+# and checks the home_automation*.service units are active. Since
+# 2026-09-22 this routes through notify() (severity-routed: a squelched
+# one-off goes to MAINTENANCE.md only, a recurring issue or a down service
+# still emails) instead of always emailing, so daily is no longer noisier
+# than weekly was - kept the script's own name (config key + cron comments)
+# despite the cadence change, matching the design spec's own reasoning.
+0 8 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
 
 # Healthchecks.io heartbeat (see home_automation/config.yaml's
 # healthchecks_io comments) - a dead-man's-switch, distinct from the two
@@ -104,6 +107,14 @@ MAILTO="iain.bate@gmail.com"
 # minutes after encrypt_secrets.sh above so the two don't race pushing to
 # the same repo.
 30 3 * * * cd /home/pi/home_automation && bash scripts/backup_solax_historical_data.sh --quiet
+
+# Sync home_automation's MAINTENANCE.md to GitHub (see that repo's
+# scripts/sync_maintenance_log.sh) so a Claude Code session on a different
+# machine (e.g. a development laptop) can see entries notify() wrote here -
+# a no-op if nothing changed since the last run. Every 30 minutes: frequent
+# enough that a session starting up sees recent activity, infrequent enough
+# to avoid commit spam.
+*/30 * * * * cd /home/pi/home_automation && bash scripts/sync_maintenance_log.sh --quiet
 
 # Forced-subtitle scanner (see docs/superpowers/specs/2026-09-14-forced-
 # subtitle-scanner-design.md). identify is weekly - new films arrive rarely,
