@@ -163,4 +163,51 @@ line2=$(printf '%s\n' "$out_rehash" | grep "Some Random Film")
 assert_contains "scan --rehash resolves it via a fresh identify attempt" "$line2" "NEEDS_FORCED_KNOWN"
 assert_contains "carries the newly title-search-resolved imdb_id" "$line2" "tt5432109"
 
+echo "== a plain 'identify --rehash' (not scan --rehash) still gets picked up by a later PLAIN scan =="
+# Regression test for a real production incident: cmd_scan's freshness
+# check only looks at the file's own stat signature and a time window -
+# it has no way to notice identify resolved a file that scan itself
+# already cached as unresolved, since the video file itself never
+# changed. Without fid_cache_set's scan_cache invalidation, a plain scan
+# (as apply calls internally) would keep replaying the stale
+# NEEDS_FORCED_UNKNOWN bucket for up to SCAN_FRESHNESS_DAYS regardless of
+# how many times `identify --rehash` re-resolves the file in the
+# meantime - exactly what happened the first time this shipped (223
+# newly-identified films were invisible to `apply` until this fix).
+INVALIDATION_FILM="$WORK/films/TitleSearch/Invalidation Film.mp4"
+ffmpeg -y -i "$WORK/base.mp4" -map 0:v -map 0:a -c copy "$INVALIDATION_FILM" -hide_banner -loglevel error
+
+cat > "$WORK/lib/ost.py" <<'PYEOF'
+import sys
+cmd = sys.argv[1]
+if cmd == "hash":
+    print("0000000000000000")
+PYEOF
+out_before=$("$FORCED_SUBS" scan)
+line_before=$(printf '%s\n' "$out_before" | grep "Invalidation Film")
+assert_contains "starts out unresolved (no search_by_title match yet)" "$line_before" "NEEDS_FORCED_UNKNOWN"
+
+# Now the title becomes resolvable (simulating TMDB/title-search finding
+# it on a later attempt) and identify --rehash (NOT scan --rehash) is
+# run directly - this is the exact sequence a real deployment uses:
+# `forced_subs identify --rehash` followed later by the plain,
+# freshness-respecting `forced_subs apply` (which calls plain `scan`
+# internally, no --rehash).
+cat > "$WORK/lib/ost.py" <<'PYEOF'
+import sys
+cmd = sys.argv[1]
+if cmd == "hash":
+    print("0000000000000000")
+elif cmd == "search_by_title":
+    if sys.argv[2] == "Invalidation Film":
+        print("tt2468013\tInvalidation Film\t2022")
+PYEOF
+"$FORCED_SUBS" identify --rehash >/dev/null
+assert_eq "identify --rehash alone resolved the imdb_id in fid_cache" "tt2468013" "$(source "$WORK/lib/forced_subs_common.sh"; FID_CACHE="$WORK/fid_cache" fid_cache_get_field "$INVALIDATION_FILM" imdb_id)"
+
+out_after=$("$FORCED_SUBS" scan)
+line_after=$(printf '%s\n' "$out_after" | grep "Invalidation Film")
+assert_contains "a later PLAIN scan (no --rehash) now sees the update" "$line_after" "NEEDS_FORCED_KNOWN"
+assert_contains "carries the newly-resolved imdb_id" "$line_after" "tt2468013"
+
 test_summary_and_exit

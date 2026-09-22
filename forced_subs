@@ -90,29 +90,9 @@ cmd_identify() {
 
 # --- scan -----------------------------------------------------------------
 
-# scan_cache row: path \t file_stat_signature \t <the 8-field result line> \t
-# checked_date. See "Incremental scanning" in the spec: lets scan skip
-# re-probing a file whose size/mtime haven't changed since it was last
-# checked. A HAS_FORCED result is trusted indefinitely on that basis alone;
-# any other bucket is also trusted, but only for SCAN_FRESHNESS_DAYS - see
-# cmd_scan.
-scan_cache_get() {
-    local file="$1"
-    [ -f "$SCAN_CACHE" ] || return 1
-    awk -F'\t' -v p="$file" '$1==p {print; found=1} END{exit !found}' "$SCAN_CACHE"
-}
-
-scan_cache_set() {
-    local file="$1" sig="$2" result_line="$3" checked_date="${4:-$(date -I)}"
-    mkdir -p "$(dirname "$SCAN_CACHE")"
-    touch "$SCAN_CACHE"
-    local tmp
-    tmp=$(mktemp)
-    awk -F'\t' -v p="$file" '$1 != p' "$SCAN_CACHE" > "$tmp"
-    printf '%s\t%s\t%s\t%s\n' "$file" "$sig" "$result_line" "$checked_date" >> "$tmp"
-    mv "$tmp" "$SCAN_CACHE"
-}
-
+# scan_cache_get/set live in lib/forced_subs_common.sh (see the row-format
+# comment there) - shared with fid_cache_set's invalidation on an identify
+# result change.
 cmd_scan() {
     local rehash=false
     while [ $# -gt 0 ]; do

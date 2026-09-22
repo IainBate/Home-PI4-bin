@@ -441,6 +441,45 @@ yaml_get_2level() {
     ' "$file"
 }
 
+# scan_cache row: path \t file_stat_signature \t <the 8-field result line> \t
+# checked_date. See "Incremental scanning" in the spec: lets cmd_scan skip
+# re-probing a file whose size/mtime haven't changed since it was last
+# checked. A HAS_FORCED result is trusted indefinitely on that basis alone;
+# any other bucket is also trusted, but only for SCAN_FRESHNESS_DAYS (see
+# cmd_scan) - or until fid_cache_set below invalidates it directly, for a
+# file whose *identify* result changed underneath an otherwise-untouched
+# scan_cache entry (the file itself has the same stat signature either
+# way, so that alone would never notice).
+scan_cache_get() {
+    local file="$1" cache="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
+    [ -f "$cache" ] || return 1
+    awk -F'\t' -v p="$file" '$1==p {print; found=1} END{exit !found}' "$cache"
+}
+
+scan_cache_set() {
+    local file="$1" sig="$2" result_line="$3" checked_date="${4:-$(date -I)}"
+    local cache="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
+    mkdir -p "$(dirname "$cache")"
+    touch "$cache"
+    local tmp; tmp=$(mktemp)
+    awk -F'\t' -v p="$file" '$1 != p' "$cache" > "$tmp"
+    printf '%s\t%s\t%s\t%s\n' "$file" "$sig" "$result_line" "$checked_date" >> "$tmp"
+    mv "$tmp" "$cache"
+}
+
+# Drops a file's scan_cache row entirely (as opposed to scan_cache_set,
+# which replaces it) - the next cmd_scan call for this file re-probes it
+# from scratch regardless of freshness, since there's nothing cached to
+# replay. A no-op if the file has no cached row or SCAN_CACHE doesn't
+# exist yet.
+scan_cache_invalidate() {
+    local file="$1" cache="${SCAN_CACHE:-/home/pi/logs/forced_subs_scan_cache}"
+    [ -f "$cache" ] || return 0
+    local tmp; tmp=$(mktemp)
+    awk -F'\t' -v p="$file" '$1 != p' "$cache" > "$tmp"
+    mv "$tmp" "$cache"
+}
+
 # forced_subs_file_ids row: path \t imdb_id \t title \t year \t confidence \t reason \t last_checked
 fid_cache_get_field() {
     local file="$1" field="$2" cache="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
@@ -457,10 +496,23 @@ fid_cache_set() {
     local cache="${FID_CACHE:-/home/pi/logs/forced_subs_file_ids}"
     mkdir -p "$(dirname "$cache")"
     touch "$cache"
+    # If this identify result actually changed the imdb_id (most notably
+    # unresolved -> resolved, e.g. a later --rehash succeeding where an
+    # earlier attempt didn't), any scan_cache row for this file is now
+    # answering a question that's no longer true - the file's own stat
+    # signature never changed, so scan's freshness check would otherwise
+    # keep replaying the stale bucket for up to SCAN_FRESHNESS_DAYS
+    # regardless. Read the previous value with the OLD cache contents,
+    # before they're overwritten below.
+    local previous_imdb_id
+    previous_imdb_id=$(fid_cache_get_field "$file" imdb_id 2>/dev/null || true)
     local tmp; tmp=$(mktemp)
     awk -F'\t' -v path="$file" '$1 != path' "$cache" > "$tmp"
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$file" "$imdb_id" "$title" "$year" "$confidence" "$reason" "$checked" >> "$tmp"
     mv "$tmp" "$cache"
+    if [ "$previous_imdb_id" != "$imdb_id" ]; then
+        scan_cache_invalidate "$file"
+    fi
 }
 
 # Called by convert_video once conversion finishes, only when nothing else
