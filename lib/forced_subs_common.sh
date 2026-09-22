@@ -374,6 +374,24 @@ identify_film_from_file() {
             if [ -n "$search_result" ]; then
                 IFS=$'\t' read -r imdb_id title year <<< "$search_result"
                 confidence="title_search"
+            elif [ -n "${TMDB_API_KEY:-}" ]; then
+                # Last resort: TMDB has runtime data OpenSubtitles'
+                # search doesn't, which lets it safely tell apart a
+                # title collision (a remake/sequel sharing the exact
+                # same name, e.g. "Jurassic Park" vs "Jurassic World",
+                # "The Lion King" 1994 vs 2019) that ost.py's
+                # search_by_title could only ever call ambiguous. See
+                # tmdb.py's pick_candidate for the exact-title+runtime
+                # matching discipline - it never guesses either.
+                local file_duration_min tmdb_result
+                file_duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
+                tmdb_result=$(python3 "$libdir/tmdb.py" identify "$norm_title" "$year_guess" "$file_duration_min" 2>/dev/null || true)
+                if [ -n "$tmdb_result" ]; then
+                    IFS=$'\t' read -r imdb_id title year <<< "$tmdb_result"
+                    confidence="tmdb"
+                else
+                    confidence="unresolved"; reason="no_match"
+                fi
             else
                 confidence="unresolved"; reason="no_match"
             fi
