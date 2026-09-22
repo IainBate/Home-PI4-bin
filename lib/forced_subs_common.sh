@@ -92,6 +92,17 @@ load_opensubtitles_creds() {
     export OST_API_KEY OST_USERNAME OST_PASSWORD OST_USER_AGENT
 }
 
+# TMDB (see lib/tmdb.py) is entirely optional - it only powers identify's
+# 4th, last-resort tier, and identify_film_from_file already checks
+# TMDB_API_KEY is non-empty before ever attempting to use it. A
+# secrets.yaml with no `tmdb:` section at all just means that tier never
+# fires, same as any other missing optional credential.
+load_tmdb_creds() {
+    local secrets_yaml="$1"
+    TMDB_API_KEY=$(yaml_get_2level "$secrets_yaml" tmdb api_key)
+    export TMDB_API_KEY
+}
+
 # Returns 1 (does not exit the caller's process - this is a library
 # function, shared by a batch script and an interactive one with very
 # different failure-handling needs) if credentials are missing or login
