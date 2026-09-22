@@ -480,6 +480,7 @@ maybe_fetch_forced_subtitle() {
         echo "(Skipping forced-subtitle fetch: OpenSubtitles credentials not configured in $secrets_yaml.)"
         return 0
     fi
+    load_tmdb_creds "$secrets_yaml"
 
     echo ""
     echo "Checking OpenSubtitles for a forced-English subtitle..."
