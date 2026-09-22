@@ -92,6 +92,17 @@ load_opensubtitles_creds() {
     export OST_API_KEY OST_USERNAME OST_PASSWORD OST_USER_AGENT
 }
 
+# TMDB (see lib/tmdb.py) is entirely optional - it only powers identify's
+# 4th, last-resort tier, and identify_film_from_file already checks
+# TMDB_API_KEY is non-empty before ever attempting to use it. A
+# secrets.yaml with no `tmdb:` section at all just means that tier never
+# fires, same as any other missing optional credential.
+load_tmdb_creds() {
+    local secrets_yaml="$1"
+    TMDB_API_KEY=$(yaml_get_2level "$secrets_yaml" tmdb api_key)
+    export TMDB_API_KEY
+}
+
 # Returns 1 (does not exit the caller's process - this is a library
 # function, shared by a batch script and an interactive one with very
 # different failure-handling needs) if credentials are missing or login
@@ -374,6 +385,24 @@ identify_film_from_file() {
             if [ -n "$search_result" ]; then
                 IFS=$'\t' read -r imdb_id title year <<< "$search_result"
                 confidence="title_search"
+            elif [ -n "${TMDB_API_KEY:-}" ]; then
+                # Last resort: TMDB has runtime data OpenSubtitles'
+                # search doesn't, which lets it safely tell apart a
+                # title collision (a remake/sequel sharing the exact
+                # same name, e.g. "Jurassic Park" vs "Jurassic World",
+                # "The Lion King" 1994 vs 2019) that ost.py's
+                # search_by_title could only ever call ambiguous. See
+                # tmdb.py's pick_candidate for the exact-title+runtime
+                # matching discipline - it never guesses either.
+                local file_duration_min tmdb_result
+                file_duration_min=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "$file" 2>/dev/null | awk '{printf "%d", $1/60}')
+                tmdb_result=$(python3 "$libdir/tmdb.py" identify "$norm_title" "$year_guess" "$file_duration_min" 2>/dev/null || true)
+                if [ -n "$tmdb_result" ]; then
+                    IFS=$'\t' read -r imdb_id title year <<< "$tmdb_result"
+                    confidence="tmdb"
+                else
+                    confidence="unresolved"; reason="no_match"
+                fi
             else
                 confidence="unresolved"; reason="no_match"
             fi
@@ -451,6 +480,7 @@ maybe_fetch_forced_subtitle() {
         echo "(Skipping forced-subtitle fetch: OpenSubtitles credentials not configured in $secrets_yaml.)"
         return 0
     fi
+    load_tmdb_creds "$secrets_yaml"
 
     echo ""
     echo "Checking OpenSubtitles for a forced-English subtitle..."
