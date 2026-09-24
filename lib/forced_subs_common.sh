@@ -227,7 +227,16 @@ find_forced_subtitle() {
     local sub_file_id srt_path
     sub_file_id=$(printf '%s' "$result" | cut -f1)
     srt_path="$(mktemp -u "${TMPDIR:-/tmp}/forced_subs_sub.XXXXXX").srt"
-    if ! python3 "$libdir/ost.py" download "$sub_file_id" "$srt_path" >>"$err_log" 2>&1 || [ ! -s "$srt_path" ]; then
+    python3 "$libdir/ost.py" download "$sub_file_id" "$srt_path" >>"$err_log" 2>&1
+    local download_rc=$?
+    if [ "$download_rc" -eq 3 ]; then
+        # ost.py's QUOTA_EXIT_CODE: the daily download quota is used up.
+        # Says nothing about this film, so it must not be cached as one.
+        rm -f "$srt_path"
+        printf 'quota_exceeded\t'
+        return 1
+    fi
+    if [ "$download_rc" -ne 0 ] || [ ! -s "$srt_path" ]; then
         rm -f "$srt_path"
         printf 'download_failed\t'
         return 1

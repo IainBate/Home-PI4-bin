@@ -24,6 +24,10 @@ import urllib.parse
 import urllib.request
 
 BASE_URL = "https://api.opensubtitles.com/api/v1"
+# /download answers 406 once the daily download quota is used up. Exiting
+# with a distinct code lets callers stop a run instead of treating the film
+# as having no subtitle (every other HTTP/network error exits 1).
+QUOTA_EXIT_CODE = 3
 
 
 def moviehash(path):
@@ -60,6 +64,8 @@ def _request(method, path, api_key, user_agent, token=None, body=None):
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
         sys.stderr.write(f"HTTP {e.code} calling {path}: {e.read().decode('utf-8', 'replace')}\n")
+        if path == "download" and e.code == 406:
+            sys.exit(QUOTA_EXIT_CODE)
         sys.exit(1)
     except urllib.error.URLError as e:
         sys.stderr.write(f"network error calling {path}: {e}\n")
