@@ -289,6 +289,14 @@ cmd_apply() {
                     fi
                     continue
                     ;;
+                quota_exceeded)
+                    # Every later download would be refused too, and the
+                    # film itself is fine - log it, leave it uncached so
+                    # the next run retries it, and end the run.
+                    log_apply "$file" "error" "quota_exceeded"
+                    echo "OpenSubtitles daily download quota used up - ending apply run early."
+                    return 0
+                    ;;
                 *)
                     consecutive_errors=0
                     unavailable_cache_set "$file" "$status"
