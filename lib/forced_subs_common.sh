@@ -622,6 +622,9 @@ maybe_fetch_forced_subtitle() {
         download_failed)
             echo "(Found a forced subtitle but downloading it failed - skipped.)"
             ;;
+        quota_exceeded)
+            echo "(Found a forced subtitle but today's OpenSubtitles download quota is used up - try again tomorrow.)"
+            ;;
         hash_search_failed|imdb_search_failed)
             echo "(OpenSubtitles search failed - network or API issue. Skipped.)"
             ;;
