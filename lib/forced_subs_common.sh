@@ -161,7 +161,7 @@ edition_label_conflict() {
 # Prints "status\tsrt_path" on stdout - srt_path is only populated when
 # status is "success" (a temp file the caller owns and must clean up).
 # status is one of: success, no_match_found, ambiguous, download_failed,
-# hash_search_failed, imdb_search_failed. Returns 0 for success, 1
+# quota_exceeded, hash_search_failed, imdb_search_failed. Returns 0 for success, 1
 # otherwise. err_log receives ost.py's own stderr (pass /dev/null to
 # discard it).
 find_forced_subtitle() {
