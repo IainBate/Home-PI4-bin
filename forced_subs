@@ -233,6 +233,9 @@ cmd_apply() {
     local max_downloads="$1"
     local success_count=0
     local consecutive_errors=0
+    # Records which account/allowance/host OpenSubtitles gave this run, so
+    # a day with an unexpectedly low download quota can be traced later.
+    log_apply "-" "login" "${OST_LOGIN_INFO:-}"
     while IFS=$'\t' read -r bucket file imdb_id title edition coverage external reason; do
         [ "$bucket" = "NEEDS_FORCED_KNOWN" ] || continue
         [ "$success_count" -lt "$max_downloads" ] || break
