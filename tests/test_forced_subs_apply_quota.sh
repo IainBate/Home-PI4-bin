@@ -49,12 +49,13 @@ if cmd == "hash":
 elif cmd == "find_forced_by_hash":
     print("555\tQuota.Film.Forced\ten")
 elif cmd == "download":
+    import os
     with open("$WORK/download_marker_log", "a") as m:
-        m.write("download\n")
+        m.write("download base_url=" + os.environ.get("OST_BASE_URL", "") + "\n")
     sys.stderr.write('HTTP 406 calling download: {"remaining":-1,"message":"You have downloaded your allowed 5 subtitles for 24h."}\n')
     sys.exit(3)
 elif cmd == "login":
-    print("test-token-abc123")
+    print("test-token-abc123\tvip-api.opensubtitles.com\tuser_id=42 level=Sub leecher allowed_downloads=20 vip=False base_url=vip-api.opensubtitles.com")
 PYEOF
 
 cat > "$WORK/secrets.yaml" <<'EOF'
@@ -85,6 +86,15 @@ echo "== a quota refusal ends the run cleanly =="
 assert_eq "apply exits 0 (quota exhaustion is not a failure)" "0" "$rc"
 assert_eq "stops after the first refused download" "1" "$(grep -c download "$WORK/download_marker_log" 2>/dev/null || echo 0)"
 assert_contains "logs the refusal as quota_exceeded" "$(cat "$APPLY_LOG" 2>/dev/null)" "quota_exceeded"
+
+echo "== login details are passed on and logged =="
+assert_contains "download calls get the login-supplied base_url" "$(cat "$WORK/download_marker_log" 2>/dev/null)" "base_url=vip-api.opensubtitles.com"
+assert_contains "apply log records the login summary" "$(cat "$APPLY_LOG" 2>/dev/null)" "$(printf 'login\tuser_id=42 level=Sub leecher allowed_downloads=20')"
+if grep -q "test-token-abc123" "$APPLY_LOG" 2>/dev/null; then
+    fail "apply log must never contain the login token"
+else
+    pass "apply log never contains the login token"
+fi
 
 echo "== no film is marked unavailable because of the quota =="
 if [ -s "$UNAVAILABLE_CACHE" ]; then

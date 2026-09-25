@@ -8,11 +8,16 @@ never argv, so they never show up in `ps`.
 Usage:
   ost.py hash <file>
   ost.py login                                    (env: OST_API_KEY OST_USER_AGENT OST_USERNAME OST_PASSWORD)
+                                                   prints token \t base_url \t token-free account summary
   ost.py identify_by_hash <hash>                   (env: OST_API_KEY OST_USER_AGENT)
   ost.py find_forced_by_hash <hash>                (env: OST_API_KEY OST_USER_AGENT)
   ost.py find_forced_by_imdb <imdb_numeric>        (env: OST_API_KEY OST_USER_AGENT)
   ost.py search_by_title <title> [year]            (env: OST_API_KEY OST_USER_AGENT)
   ost.py download <file_id> <output_path>          (env: OST_API_KEY OST_USER_AGENT OST_TOKEN)
+
+Every command except hash sends its requests to OST_BASE_URL (the host
+login returned) when that is set to an opensubtitles.com host, else to
+BASE_URL.
 """
 import json
 import os
@@ -48,6 +53,19 @@ def moviehash(path):
     return "%016x" % h
 
 
+_BASE_HOST_RE = re.compile(r"^([a-z0-9-]+\.)*opensubtitles\.com$")
+
+
+def _api_base():
+    # The API docs ask clients to send post-login requests to the base_url
+    # login returns. Only ever an opensubtitles.com host, so a bad or
+    # tampered value can never send the token anywhere else.
+    host = os.environ.get("OST_BASE_URL", "").strip().lower()
+    if host and _BASE_HOST_RE.match(host):
+        return f"https://{host}/api/v1"
+    return BASE_URL
+
+
 def _request(method, path, api_key, user_agent, token=None, body=None):
     headers = {
         "Accept": "application/json",
@@ -58,7 +76,7 @@ def _request(method, path, api_key, user_agent, token=None, body=None):
     if token:
         headers["Authorization"] = f"Bearer {token}"
     data = json.dumps(body).encode("utf-8") if body is not None else None
-    req = urllib.request.Request(f"{BASE_URL}/{path}", data=data, headers=headers, method=method)
+    req = urllib.request.Request(f"{_api_base()}/{path}", data=data, headers=headers, method=method)
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read().decode("utf-8"))
@@ -77,7 +95,14 @@ def cmd_login():
         "POST", "login", os.environ["OST_API_KEY"], os.environ["OST_USER_AGENT"],
         body={"username": os.environ["OST_USERNAME"], "password": os.environ["OST_PASSWORD"]},
     )
-    print(resp["token"])
+    # The summary (never the token) goes into the apply log, so a day when
+    # OpenSubtitles treats downloads as anonymous can be traced afterwards.
+    user = resp.get("user", {}) or {}
+    base_url = resp.get("base_url", "") or ""
+    summary = " ".join(
+        f"{k}={user.get(k, '')}" for k in ("user_id", "level", "allowed_downloads", "vip")
+    ) + f" base_url={base_url}"
+    print(f"{resp['token']}\t{base_url}\t{summary}")
 
 
 def _best_feature_match(data):

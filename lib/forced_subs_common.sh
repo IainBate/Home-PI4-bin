@@ -114,12 +114,17 @@ opensubtitles_login() {
         echo "ERROR: OpenSubtitles credentials missing from $secrets_yaml (opensubtitles.api_key/username/password)." >&2
         return 1
     fi
-    OST_TOKEN=$(python3 "$libdir/ost.py" login)
+    # ost.py login prints token \t base_url \t token-free account summary.
+    # OST_BASE_URL routes later requests to the host login named;
+    # OST_LOGIN_INFO is for the caller to log.
+    local login_output
+    login_output=$(python3 "$libdir/ost.py" login)
+    IFS=$'\t' read -r OST_TOKEN OST_BASE_URL OST_LOGIN_INFO <<< "$login_output"
     if [ -z "$OST_TOKEN" ]; then
         echo "ERROR: OpenSubtitles login failed - check credentials/network." >&2
         return 1
     fi
-    export OST_TOKEN
+    export OST_TOKEN OST_BASE_URL OST_LOGIN_INFO
 }
 
 # Checks a subtitle search result's release-name string against a
