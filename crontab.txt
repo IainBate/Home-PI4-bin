@@ -30,6 +30,10 @@ MAILTO="iain.bate@gmail.com"
 # enough to keep it refreshed - well under the 8h expiry - with output kept
 # to a small local log rather than stdout, so it doesn't trigger MAILTO.
 0 */4 * * * cd /home/pi/home_automation && { date -Is; /usr/local/bin/claude -p "reply with just: ok"; } >> logs/claude_keepalive.log 2>&1
+# Same keep-alive for the second (gmail) Claude account, logged in with its own
+# CLAUDE_CONFIG_DIR (2026-09-25) - claude_usage_poller.py reads its token from
+# ~/.claude-gmail (config.yaml claude_usage.accounts). Offset to :30.
+30 */4 * * * cd /home/pi/home_automation && { date -Is; CLAUDE_CONFIG_DIR=/home/pi/.claude-gmail /usr/local/bin/claude -p "reply with just: ok"; } >> logs/claude_keepalive_gmail.log 2>&1
 
 # Home automation dashboard pollers (see home_automation/config.yaml comments for each).
 # --quiet now also routes their WARNING+ logging to logs/*.log instead of
