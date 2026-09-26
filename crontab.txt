@@ -170,3 +170,4 @@ MAILTO="iain.bate@gmail.com"
 # actually finished the whole library, since there's nothing left to do.
 @reboot sleep 60 && cd /home/pi/bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
 15 4 * * Sun cd /home/pi/home_automation && git gc --auto --quiet
+5 * * * * cd /home/pi/home_automation && venv/bin/python3 scripts/octopus_charges_poller.py --quiet
