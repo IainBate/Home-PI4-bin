@@ -78,7 +78,8 @@ MAILTO="iain.bate@gmail.com"
 # Daily digest of the above pollers' recurring failures (see
 # home_automation/config.yaml's daily_digest_check comments) - only emails
 # when something recurred, at most once a day.
-0 7 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/daily_digest_check.py --quiet
+0 8 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/health_check.py --quiet
+5 8 * * 0 cd /home/pi/home_automation && venv/bin/python3 scripts/health_check.py --weekly --quiet
 
 # Automation health check (see home_automation/config.yaml's
 # weekly_health_check comments) - the priority path: scans
@@ -89,7 +90,6 @@ MAILTO="iain.bate@gmail.com"
 # still emails) instead of always emailing, so daily is no longer noisier
 # than weekly was - kept the script's own name (config key + cron comments)
 # despite the cadence change, matching the design spec's own reasoning.
-0 8 * * * cd /home/pi/home_automation && venv/bin/python3 scripts/weekly_health_check.py --quiet
 
 # Healthchecks.io heartbeat (see home_automation/config.yaml's
 # healthchecks_io comments) - a dead-man's-switch, distinct from the two
@@ -169,3 +169,4 @@ MAILTO="iain.bate@gmail.com"
 # network time to come up first; harmless/near-instant once identify has
 # actually finished the whole library, since there's nothing left to do.
 @reboot sleep 60 && cd /home/pi/bin && ./forced_subs identify --quiet >>/home/pi/logs/forced_subs_identify_logfile 2>&1
+15 4 * * Sun cd /home/pi/home_automation && git gc --auto --quiet
